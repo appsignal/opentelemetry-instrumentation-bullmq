@@ -48,7 +48,7 @@ export class Instrumentation extends InstrumentationBase {
 
   private _onPatchMain() {
     return (moduleExports: typeof bullmq) => {
-      this._diag.debug('patching');
+      this._diag.debug(`patching ${this.instrumentationName}@${VERSION}`);
 
       // As Spans
       this._wrap(moduleExports.Queue.prototype, 'add', this._patchQueueAdd());
@@ -72,7 +72,7 @@ export class Instrumentation extends InstrumentationBase {
 
   private _onUnPatchMain() {
     return (moduleExports: typeof bullmq) => {
-      this._diag.debug('un-patching');
+      this._diag.debug(`un-patching ${this.instrumentationName}@${VERSION}`);
 
       this._unwrap(moduleExports.Queue.prototype, 'add');
       this._unwrap(moduleExports.Queue.prototype, 'addBulk');

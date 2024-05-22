@@ -4,7 +4,7 @@ const queue = `${ns}.queue`
 const worker = `${ns}.worker`
 
 export const BullMQAttributes = {
-  MESSAGING_SYSTEM: 'BullMQ',
+  MESSAGING_SYSTEM: 'bullmq',
   JOB_ATTEMPTS: `${job}.attempts`,
   JOB_DELAY: `${job}.delay`,
   JOB_FAILED_REASON: `${job}.failedReason`,

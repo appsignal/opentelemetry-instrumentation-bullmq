@@ -238,7 +238,7 @@ describe("bullmq", () => {
   describe("FlowProducer", () => {
     it("should not generate any spans when disabled", async () => {
       instrumentation.disable();
-      const q = new FlowProducer();
+      const q = new FlowProducer({ connection });
       await q.add({ name: "jobName", queueName: "queueName" });
 
       const spans = memoryExporter.getFinishedSpans();
@@ -246,7 +246,7 @@ describe("bullmq", () => {
     });
 
     it("should create a queue span and a job span for add", async () => {
-      const q = new FlowProducer();
+      const q = new FlowProducer({ connection });
       await q.add({ name: "jobName", queueName: "queueName" });
 
       const spans = memoryExporter.getFinishedSpans();
@@ -287,7 +287,7 @@ describe("bullmq", () => {
     });
 
     it("should create a queue span and many job spans for add with children", async () => {
-      const q = new FlowProducer();
+      const q = new FlowProducer({ connection });
       await q.add({
         name: "jobName",
         queueName: "queueName",
@@ -367,7 +367,7 @@ describe("bullmq", () => {
     });
 
     it("should create a queue span and many job spans for addBulk", async () => {
-      const q = new FlowProducer();
+      const q = new FlowProducer({ connection });
       await q.addBulk([
         { name: "jobName1", queueName: "queueName" },
         { name: "jobName2", queueName: "queueName" },

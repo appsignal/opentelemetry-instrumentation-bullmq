@@ -75,10 +75,9 @@ export class Instrumentation extends InstrumentationBase {
       );
       this._wrap(moduleExports.Job.prototype, "addJob", this._patchAddJob());
 
-      // @ts-expect-error
       this._wrap(
         moduleExports.Worker.prototype,
-        "callProcessJob",
+        "callProcessJob" as any,
         this._patchCallProcessJob(),
       );
       this._wrap(moduleExports.Worker.prototype, "run", this._patchWorkerRun());

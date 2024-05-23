@@ -1,10 +1,10 @@
-const ns = 'messaging.bullmq';
-const job = `${ns}.job`
-const queue = `${ns}.queue`
-const worker = `${ns}.worker`
+const ns = "messaging.bullmq";
+const job = `${ns}.job`;
+const queue = `${ns}.queue`;
+const worker = `${ns}.worker`;
 
 export const BullMQAttributes = {
-  MESSAGING_SYSTEM: 'bullmq',
+  MESSAGING_SYSTEM: "bullmq",
   JOB_ATTEMPTS: `${job}.attempts`,
   JOB_DELAY: `${job}.delay`,
   JOB_FAILED_REASON: `${job}.failedReason`,
@@ -26,4 +26,4 @@ export const BullMQAttributes = {
   WORKER_RATE_LIMIT_MAX: `${worker}.rateLimiter.max`,
   WORKER_RATE_LIMIT_DURATION: `${worker}.rateLimiter.duration`,
   WORKER_RATE_LIMIT_GROUP: `${worker}.rateLimiter.groupKey`,
-}
+};

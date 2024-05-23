@@ -2,9 +2,9 @@ name: Node.js CI
 
 on:
   schedule:
-    - cron: '5 9 * * 5'
+    - cron: "5 9 * * 5"
   pull_request:
-    branches: [ main ]
+    branches: [main]
   workflow_dispatch:
 
 jobs:
@@ -18,7 +18,7 @@ jobs:
       redis:
         image: redis:alpine
         ports:
-          - '6379:6379'
+          - "6379:6379"
     steps:
       - uses: actions/checkout@v3
       - name: Use Node.js ${{ matrix.node-version }}

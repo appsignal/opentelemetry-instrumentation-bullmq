@@ -10,8 +10,8 @@
   "scripts": {
     "compile": "tsc -p .",
     "compile:watch": "tsc -w",
-    "lint": "eslint src/ test/ --ext .ts",
-    "lint:fix": "eslint src/ test/ --ext .ts --fix",
+    "lint": "eslint src/ test/ --ext .ts; prettier -c .",
+    "lint:fix": "eslint src/ test/ --ext .ts --fix; prettier -w .",
     "prepare": "npm run compile",
     "test": "mocha --require ts-node/register --exit --timeout 10000 test/**/*.test.ts"
   },
@@ -46,9 +46,11 @@
     "@typescript-eslint/parser": "^5.35.1",
     "bullmq": "^3.5.1",
     "eslint": "^8.23.0",
+    "eslint-config-prettier": "^9.1.0",
     "ioredis-mock": "^8.2.2",
     "mocha": "^10.0.0",
     "nyc": "^15.1.0",
+    "prettier": "^3.2.5",
     "rewiremock": "^3.14.3",
     "shimmer": "^1.2.1",
     "sinon": "^14.0.0",

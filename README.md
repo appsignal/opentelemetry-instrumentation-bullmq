@@ -26,32 +26,31 @@ OpenTelemetry Bullmq Instrumentation allows the user to automatically collect tr
 To load the instrumentation, specify it in the instrumentations list to `registerInstrumentations`. There is currently no configuration option.
 
 ```javascript
-const { NodeTracerProvider } = require('@opentelemetry/sdk-trace-node');
-const { registerInstrumentations } = require('@opentelemetry/instrumentation');
-const { BullMQInstrumentation } = require('@jenniferplusplus/opentelemetry-instrumentation-bullmq');
+const { NodeTracerProvider } = require("@opentelemetry/sdk-trace-node");
+const { registerInstrumentations } = require("@opentelemetry/instrumentation");
+const {
+  BullMQInstrumentation,
+} = require("@jenniferplusplus/opentelemetry-instrumentation-bullmq");
 
 const provider = new NodeTracerProvider();
 provider.register();
 
 registerInstrumentations({
-  instrumentations: [
-    new BullMQInstrumentation(),
-  ],
+  instrumentations: [new BullMQInstrumentation()],
 });
 ```
 
 ## Emitted Spans
 
-| Name                                                   | BullMQ method           | Description                                         |
-|--------------------------------------------------------|-------------------------|-----------------------------------------------------|
-| `{QueueName.JobName} Queue.add`                        | `Queue.add            ` | A new job is added to the queue                     |
-| `{QueueName} Queue.addBulk`                            | `Queue.addBulk        ` | New jobs are added to the queue in bulk             |
-| `{QueueName.FlowName} FlowProducer.add`                | `FlowProducer.add     ` | A new job flow is added to a queue                  |
-| `FlowProducer.addBulk  `                               | `FlowProducer.addBulk ` | New job flows are added to queues in bulk           |
-| `{QueueName.JobName} Job.addJob`                       | `Job.addJob           ` | Each individual job added to a queue                |
-| `{WorkerName} Worker.run`                              | `Worker.run           ` | While a worker is accepting jobs                    |
-| `{QueueName.JobName} Worker.{WorkerName} #{attempt}`   | `Worker.callProcessJob` | Each job execution by a worker's processor function |
-
+| Name                                                 | BullMQ method           | Description                                         |
+| ---------------------------------------------------- | ----------------------- | --------------------------------------------------- |
+| `{QueueName.JobName} Queue.add`                      | `Queue.add            ` | A new job is added to the queue                     |
+| `{QueueName} Queue.addBulk`                          | `Queue.addBulk        ` | New jobs are added to the queue in bulk             |
+| `{QueueName.FlowName} FlowProducer.add`              | `FlowProducer.add     ` | A new job flow is added to a queue                  |
+| `FlowProducer.addBulk  `                             | `FlowProducer.addBulk ` | New job flows are added to queues in bulk           |
+| `{QueueName.JobName} Job.addJob`                     | `Job.addJob           ` | Each individual job added to a queue                |
+| `{WorkerName} Worker.run`                            | `Worker.run           ` | While a worker is accepting jobs                    |
+| `{QueueName.JobName} Worker.{WorkerName} #{attempt}` | `Worker.callProcessJob` | Each job execution by a worker's processor function |
 
 ## Useful links
 

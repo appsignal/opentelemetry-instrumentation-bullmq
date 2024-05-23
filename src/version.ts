@@ -1,4 +1,4 @@
-import path from 'node:path';
+import path from "node:path";
 
 const packageJsonUrl = path.resolve(`${module.path}/../package.json`);
 // eslint-disable-next-line @typescript-eslint/no-var-requires

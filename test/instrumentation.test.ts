@@ -17,6 +17,7 @@ import {
 import type * as bullmq from 'bullmq';
 
 import {BullMQInstrumentation} from '../src'
+import IORedis from 'ioredis';
 
 // rewiremock.disable();
 
@@ -58,6 +59,9 @@ describe('bullmq', () => {
     Queue = require('bullmq').Queue;
     FlowProducer = require('bullmq').FlowProducer;
     /* eslint-enable @typescript-eslint/no-var-requires */
+
+    const client = new IORedis(connection);
+    client.flushall();
   });
 
   afterEach(() => {

@@ -500,8 +500,8 @@ describe("bullmq", () => {
       );
       assert.notStrictEqual(jobAddSpan, undefined);
 
-      const workerJobSpan = spans.find(
-        (span) => span.name === "queueName.testJob Worker.queueName #1",
+      const workerJobSpan = spans.find((span) =>
+        span.name.includes("queueName.testJob Worker.queueName"),
       );
       assert.notStrictEqual(workerJobSpan, undefined);
       assert.strictEqual(workerJobSpan?.kind, SpanKind.CONSUMER);
@@ -511,10 +511,16 @@ describe("bullmq", () => {
         "messaging.message_id": "1",
         "messaging.operation": "receive",
         "messaging.bullmq.job.name": "testJob",
-        "messaging.bullmq.job.attempts": 1,
         "messaging.bullmq.queue.name": "queueName",
         "messaging.bullmq.worker.name": "queueName",
       });
+
+      // Attempts start from 0 in BullMQ 5, and from 1 in BullMQ 4 or earlier
+      assert.ok(
+        (workerJobSpan?.attributes![
+          "messaging.bullmq.job.attempts"
+        ] as number) < 2,
+      );
       assert.strictEqual(
         typeof workerJobSpan?.attributes!["messaging.bullmq.job.timestamp"],
         "number",
@@ -622,34 +628,49 @@ describe("bullmq", () => {
       await w.close();
 
       const spans = memoryExporter.getFinishedSpans();
+      assert.strictEqual(spans.length, 5);
       spans.forEach(assertMessagingSystem);
 
-      const firstJobSpan = spans.find((span) =>
-        span.name.includes("Worker.worker #1"),
+      const jobSpans = spans.filter((span) =>
+        span.name.includes("Worker.worker"),
       );
-      assert.notStrictEqual(firstJobSpan, undefined);
-      assertContains(firstJobSpan?.attributes!, {
-        "messaging.bullmq.job.attempts": 1,
+      assert.strictEqual(jobSpans.length, 2);
+      jobSpans.forEach((span) => {
+        assert.strictEqual(
+          typeof span.attributes["messaging.bullmq.job.attempts"],
+          "number",
+        );
       });
+
+      jobSpans.sort((a, b) => {
+        const aAttempts = a.attributes![
+          "messaging.bullmq.job.attempts"
+        ] as number;
+        const bAttempts = b.attributes![
+          "messaging.bullmq.job.attempts"
+        ] as number;
+        return aAttempts - bAttempts;
+      });
+
+      const firstJobSpan = jobSpans[0];
+      assert.notStrictEqual(firstJobSpan, undefined);
       assertDoesNotContain(firstJobSpan?.attributes!, [
         "messaging.bullmq.job.failedReason",
       ]);
       assert.strictEqual(firstJobSpan?.events.length, 1);
 
-      const secondJobSpan = spans.find((span) =>
-        span.name.includes("Worker.worker #2"),
-      );
+      const secondJobSpan = jobSpans[1];
       assert.notStrictEqual(secondJobSpan, undefined);
       assertContains(secondJobSpan?.attributes!, {
-        "messaging.bullmq.job.attempts": 2,
         "messaging.bullmq.job.failedReason": "forced error",
       });
       assert.strictEqual(secondJobSpan?.events.length, 0);
 
-      const thirdJobSpan = spans.find((span) =>
-        span.name.includes("Worker.worker #3"),
+      assert.strictEqual(
+        (secondJobSpan.attributes!["messaging.bullmq.job.attempts"] as number) -
+          (firstJobSpan.attributes!["messaging.bullmq.job.attempts"] as number),
+        1,
       );
-      assert.strictEqual(thirdJobSpan, undefined);
     });
   });
 });

@@ -150,15 +150,13 @@ describe("bullmq", () => {
       assertContains(jobAddSpan?.attributes!, {
         "messaging.destination": "queueName",
         "messaging.bullmq.job.name": "jobName",
-        // TODO: rename to `messaging.message.id`
-        // TODO: why is it `unknown`???
-        "message.id": "unknown",
       });
-      // TODO: as they are not flow related, they should not have parentOpts
-      // assertDoesNotContain(jobAddSpan?.attributes!, [
-      //   'messaging.bullmq.job.parentOpts.parentKey',
-      //   'messaging.bullmq.job.parentOpts.flowChildrenKey',
-      // ])
+      // TODO: why is there no message ID?
+      assertDoesNotContain(jobAddSpan?.attributes!, [
+        "message.id",
+        'messaging.bullmq.job.parentOpts.parentKey',
+        'messaging.bullmq.job.parentOpts.flowChildrenKey'
+      ])
 
       assertSpanParent(jobAddSpan!, queueAddSpan!);
       assertRootSpan(queueAddSpan!);
@@ -275,12 +273,10 @@ describe("bullmq", () => {
         typeof jobAddSpan?.attributes!["message.id"],
         "string",
       );
-      assert.notStrictEqual(jobAddSpan?.attributes!["message.id"], "unknown");
-      // TODO: as it does not use children, it should not have parentOpts
-      // assertDoesNotContain(jobAddSpan?.attributes!, [
-      //   'messaging.bullmq.job.parentOpts.parentKey',
-      //   'messaging.bullmq.job.parentOpts.flowChildrenKey',
-      // ])
+      assertDoesNotContain(jobAddSpan?.attributes!, [
+        'messaging.bullmq.job.parentOpts.parentKey',
+        'messaging.bullmq.job.parentOpts.flowChildrenKey',
+      ])
 
       assertSpanParent(jobAddSpan!, flowProducerAddSpan!);
       assertRootSpan(flowProducerAddSpan!);
@@ -326,11 +322,9 @@ describe("bullmq", () => {
         typeof jobAddSpan?.attributes!["message.id"],
         "string",
       );
-      assert.notStrictEqual(jobAddSpan?.attributes!["message.id"], "unknown");
-      // TODO: as it does not have a parent, it should not have a parentKey
-      // assertDoesNotContain(jobAddSpan?.attributes!, [
-      //   'messaging.bullmq.job.parentOpts.parentKey',
-      // ])
+      assertDoesNotContain(jobAddSpan?.attributes!, [
+        'messaging.bullmq.job.parentOpts.parentKey',
+      ])
 
       const jobId = jobAddSpan?.attributes!["message.id"] as string;
 
@@ -356,10 +350,9 @@ describe("bullmq", () => {
         "unknown",
       );
       assert.notStrictEqual(childJobAddSpan?.attributes!["message.id"], jobId);
-      // TODO: as it does not have children, it should not have a waitChildrenKey
-      // assertDoesNotContain(childJobAddSpan?.attributes!, [
-      //   'messaging.bullmq.job.parentOpts.waitChildrenKey',
-      // ])
+      assertDoesNotContain(childJobAddSpan?.attributes!, [
+        'messaging.bullmq.job.parentOpts.waitChildrenKey',
+      ])
 
       assertSpanParent(jobAddSpan!, flowProducerAddSpan!);
       assertSpanParent(childJobAddSpan!, flowProducerAddSpan!);
@@ -475,10 +468,6 @@ describe("bullmq", () => {
         "messaging.bullmq.worker.concurrency": 1,
         "messaging.bullmq.worker.lockDuration": 30000,
         "messaging.bullmq.worker.lockRenewTime": 15000,
-        // should these attributes be here at all if they'll just be 'none'?
-        "messaging.bullmq.worker.rateLimiter.max": "none",
-        "messaging.bullmq.worker.rateLimiter.duration": "none",
-        "messaging.bullmq.worker.rateLimiter.groupKey": "none",
       });
 
       // Attempts start from 0 in BullMQ 5, and from 1 in BullMQ 4 or earlier

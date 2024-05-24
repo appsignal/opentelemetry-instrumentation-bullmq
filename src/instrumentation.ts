@@ -136,12 +136,12 @@ export class Instrumentation extends InstrumentationBase {
           kind: SpanKind.PRODUCER,
         });
         if (parentOpts) {
-          span.setAttributes({
+          span.setAttributes(Instrumentation.dropInvalidAttributes({
             [BullMQAttributes.JOB_PARENT_KEY]:
-              parentOpts.parentKey ?? "unknown",
+              parentOpts.parentKey,
             [BullMQAttributes.JOB_WAIT_CHILDREN_KEY]:
-              parentOpts.waitChildrenKey ?? "unknown",
-          });
+              parentOpts.waitChildrenKey,
+          }));
         }
         const parentContext = context.active();
         const messageContext = trace.setSpan(parentContext, span);
@@ -153,10 +153,9 @@ export class Instrumentation extends InstrumentationBase {
           } catch (e) {
             throw Instrumentation.setError(span, e as Error);
           } finally {
-            span.setAttribute(
-              SemanticAttributes.MESSAGE_ID,
-              this.id ?? "unknown",
-            );
+            span.setAttributes(Instrumentation.dropInvalidAttributes({
+              [SemanticAttributes.MESSAGE_ID]: this.id,
+            }));
             span.setAttribute(BullMQAttributes.JOB_TIMESTAMP, this.timestamp);
             span.end();
           }
@@ -294,11 +293,11 @@ export class Instrumentation extends InstrumentationBase {
         const span = tracer.startSpan(
           spanName,
           {
-            attributes: {
+            attributes: Instrumentation.dropInvalidAttributes({
               [SemanticAttributes.MESSAGING_SYSTEM]:
                 BullMQAttributes.MESSAGING_SYSTEM,
               [SemanticAttributes.MESSAGING_CONSUMER_ID]: workerName,
-              [SemanticAttributes.MESSAGING_MESSAGE_ID]: job.id ?? "unknown",
+              [SemanticAttributes.MESSAGING_MESSAGE_ID]: job.id,
               [SemanticAttributes.MESSAGING_OPERATION]: "receive",
               [BullMQAttributes.JOB_NAME]: job.name,
               [BullMQAttributes.JOB_ATTEMPTS]: job.attemptsMade,
@@ -308,19 +307,19 @@ export class Instrumentation extends InstrumentationBase {
               [BullMQAttributes.QUEUE_NAME]: job.queueName,
               [BullMQAttributes.WORKER_NAME]: workerName,
               [BullMQAttributes.WORKER_CONCURRENCY]:
-              this.opts?.concurrency ?? "default",
+              this.opts?.concurrency,
               [BullMQAttributes.WORKER_LOCK_DURATION]:
-                this.opts?.lockDuration ?? "default",
+                this.opts?.lockDuration,
               [BullMQAttributes.WORKER_LOCK_RENEW]:
-                this.opts?.lockRenewTime ?? "default",
+                this.opts?.lockRenewTime,
               [BullMQAttributes.WORKER_RATE_LIMIT_MAX]:
-                this.opts?.limiter?.max ?? "none",
+                this.opts?.limiter?.max,
               [BullMQAttributes.WORKER_RATE_LIMIT_DURATION]:
-                this.opts?.limiter?.duration ?? "none",
+                this.opts?.limiter?.duration,
               // Limit by group keys was removed in bullmq 3.x
               [BullMQAttributes.WORKER_RATE_LIMIT_GROUP]:
-                (this.opts?.limiter as any)?.groupKey ?? "none",
-            },
+                (this.opts?.limiter as any)?.groupKey,
+            }),
             kind: SpanKind.CONSUMER,
           },
           parentContext,
@@ -363,13 +362,13 @@ export class Instrumentation extends InstrumentationBase {
     return function extendLock<T extends Fn>(original: T) {
       return function patch(this: Job, ...args: any): Promise<ReturnType<T>> {
         const span = trace.getSpan(context.active());
-        span?.addEvent("extendLock", {
+        span?.addEvent("extendLock", Instrumentation.dropInvalidAttributes({
           [BullMQAttributes.JOB_NAME]: this.name,
           [BullMQAttributes.JOB_TIMESTAMP]: this.timestamp,
           [BullMQAttributes.JOB_PROCESSED_TIMESTAMP]:
-            this.processedOn ?? "unknown",
+            this.processedOn,
           [BullMQAttributes.JOB_ATTEMPTS]: this.attemptsMade,
-        });
+        }));
 
         return original.apply(this, args);
       };
@@ -380,13 +379,13 @@ export class Instrumentation extends InstrumentationBase {
     return function extendLock<T extends Fn>(original: T) {
       return function patch(this: Job, ...args: any): Promise<ReturnType<T>> {
         const span = trace.getSpan(context.active());
-        span?.addEvent("remove", {
+        span?.addEvent("remove", Instrumentation.dropInvalidAttributes({
           [BullMQAttributes.JOB_NAME]: this.name,
           [BullMQAttributes.JOB_TIMESTAMP]: this.timestamp,
           [BullMQAttributes.JOB_PROCESSED_TIMESTAMP]:
-            this.processedOn ?? "unknown",
+            this.processedOn,
           [BullMQAttributes.JOB_ATTEMPTS]: this.attemptsMade,
-        });
+        }));
 
         return original.apply(this, args);
       };
@@ -397,13 +396,13 @@ export class Instrumentation extends InstrumentationBase {
     return function extendLock<T extends Fn>(original: T) {
       return function patch(this: Job, ...args: any): Promise<ReturnType<T>> {
         const span = trace.getSpan(context.active());
-        span?.addEvent("retry", {
+        span?.addEvent("retry", Instrumentation.dropInvalidAttributes({
           [BullMQAttributes.JOB_NAME]: this.name,
           [BullMQAttributes.JOB_TIMESTAMP]: this.timestamp,
           [BullMQAttributes.JOB_PROCESSED_TIMESTAMP]:
-            this.processedOn ?? "unknown",
+            this.processedOn,
           [BullMQAttributes.JOB_ATTEMPTS]: this.attemptsMade,
-        });
+        }));
 
         return original.apply(this, args);
       };
@@ -418,11 +417,7 @@ export class Instrumentation extends InstrumentationBase {
 
   private static attrMap(prefix: string, opts: JobsOptions): Attributes {
     const attrs = flatten({ [prefix]: opts }) as Attributes;
-    for (const key in attrs) {
-      if (attrs[key] === undefined) delete attrs[key];
-    }
-
-    return attrs;
+    return this.dropInvalidAttributes(attrs);
   }
 
   private static async withContext(
@@ -443,5 +438,16 @@ export class Instrumentation extends InstrumentationBase {
         span.end();
       }
     });
+  }
+
+  private static dropInvalidAttributes(attributes: Attributes): Attributes {
+    const keys = Object.keys(attributes);
+    for (const key of keys) {
+      if (attributes[key] === undefined || attributes[key] === null) {
+        delete attributes[key];
+      }
+    }
+
+    return attributes;
   }
 }

@@ -451,7 +451,7 @@ describe("bullmq", () => {
       await w.close();
 
       const spans = memoryExporter.getFinishedSpans();
-      assert.strictEqual(spans.length, 4);
+      assert.strictEqual(spans.length, 3);
       spans.forEach(assertMessagingSystem);
 
       const jobAddSpan = spans.find(
@@ -472,6 +472,13 @@ describe("bullmq", () => {
         "messaging.bullmq.job.name": "testJob",
         "messaging.bullmq.queue.name": "queueName",
         "messaging.bullmq.worker.name": "queueName",
+        "messaging.bullmq.worker.concurrency": 1,
+        "messaging.bullmq.worker.lockDuration": 30000,
+        "messaging.bullmq.worker.lockRenewTime": 15000,
+        // should these attributes be here at all if they'll just be 'none'?
+        "messaging.bullmq.worker.rateLimiter.max": "none",
+        "messaging.bullmq.worker.rateLimiter.duration": "none",
+        "messaging.bullmq.worker.rateLimiter.groupKey": "none",
       });
 
       // Attempts start from 0 in BullMQ 5, and from 1 in BullMQ 4 or earlier
@@ -495,20 +502,6 @@ describe("bullmq", () => {
 
       // no error event
       assert.strictEqual(workerJobSpan?.events.length, 0);
-
-      const workerRunSpan = spans.find(
-        (span) => span.name === "queueName Worker.run",
-      );
-      assertContains(workerRunSpan?.attributes!, {
-        "messaging.bullmq.worker.name": "queueName",
-        "messaging.bullmq.worker.concurrency": 1,
-        "messaging.bullmq.worker.lockDuration": 30000,
-        "messaging.bullmq.worker.lockRenewTime": 15000,
-        // should these attributes be here at all if they'll just be 'none'?
-        "messaging.bullmq.worker.rateLimiter.max": "none",
-        "messaging.bullmq.worker.rateLimiter.duration": "none",
-        "messaging.bullmq.worker.rateLimiter.groupKey": "none",
-      });
     });
 
     it("should capture events from the processor", async () => {
@@ -601,7 +594,7 @@ describe("bullmq", () => {
       await w.close();
 
       const spans = memoryExporter.getFinishedSpans();
-      assert.strictEqual(spans.length, 5);
+      assert.strictEqual(spans.length, 4);
       spans.forEach(assertMessagingSystem);
 
       const jobSpans = spans.filter((span) =>

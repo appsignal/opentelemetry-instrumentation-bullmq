@@ -80,7 +80,6 @@ export class Instrumentation extends InstrumentationBase {
         "callProcessJob" as any,
         this._patchCallProcessJob(),
       );
-      this._wrap(moduleExports.Worker.prototype, "run", this._patchWorkerRun());
 
       // As Events
       this._wrap(
@@ -105,9 +104,7 @@ export class Instrumentation extends InstrumentationBase {
       this._unwrap(moduleExports.FlowProducer.prototype, "addBulk");
       this._unwrap(moduleExports.Job.prototype, "addJob");
 
-      // @ts-expect-error
-      this._unwrap(moduleExports.Worker.prototype, "callProcessJob");
-      this._unwrap(moduleExports.Worker.prototype, "run");
+      this._unwrap(moduleExports.Worker.prototype, "callProcessJob" as any);
 
       this._unwrap(moduleExports.Job.prototype, "extendLock");
       this._unwrap(moduleExports.Job.prototype, "remove");
@@ -310,6 +307,19 @@ export class Instrumentation extends InstrumentationBase {
               ...Instrumentation.attrMap(BullMQAttributes.JOB_OPTS, job.opts),
               [BullMQAttributes.QUEUE_NAME]: job.queueName,
               [BullMQAttributes.WORKER_NAME]: workerName,
+              [BullMQAttributes.WORKER_CONCURRENCY]:
+              this.opts?.concurrency ?? "default",
+              [BullMQAttributes.WORKER_LOCK_DURATION]:
+                this.opts?.lockDuration ?? "default",
+              [BullMQAttributes.WORKER_LOCK_RENEW]:
+                this.opts?.lockRenewTime ?? "default",
+              [BullMQAttributes.WORKER_RATE_LIMIT_MAX]:
+                this.opts?.limiter?.max ?? "none",
+              [BullMQAttributes.WORKER_RATE_LIMIT_DURATION]:
+                this.opts?.limiter?.duration ?? "none",
+              // Limit by group keys was removed in bullmq 3.x
+              [BullMQAttributes.WORKER_RATE_LIMIT_GROUP]:
+                (this.opts?.limiter as any)?.groupKey ?? "none",
             },
             kind: SpanKind.CONSUMER,
           },
@@ -345,41 +355,6 @@ export class Instrumentation extends InstrumentationBase {
             span.end();
           }
         });
-      };
-    };
-  }
-
-  private _patchWorkerRun(): (original: Function) => (...args: any) => any {
-    const instrumentation = this;
-    const tracer = instrumentation.tracer;
-    const action = "Worker.run";
-
-    return function run(original) {
-      return async function patch(this: Worker, ...args: any): Promise<any> {
-        const spanName = `${this.name} ${action}`;
-        const span = tracer.startSpan(spanName, {
-          attributes: {
-            [SemanticAttributes.MESSAGING_SYSTEM]:
-              BullMQAttributes.MESSAGING_SYSTEM,
-            [BullMQAttributes.WORKER_NAME]: this.name,
-            [BullMQAttributes.WORKER_CONCURRENCY]:
-              this.opts?.concurrency ?? "default",
-            [BullMQAttributes.WORKER_LOCK_DURATION]:
-              this.opts?.lockDuration ?? "default",
-            [BullMQAttributes.WORKER_LOCK_RENEW]:
-              this.opts?.lockRenewTime ?? "default",
-            [BullMQAttributes.WORKER_RATE_LIMIT_MAX]:
-              this.opts?.limiter?.max ?? "none",
-            [BullMQAttributes.WORKER_RATE_LIMIT_DURATION]:
-              this.opts?.limiter?.duration ?? "none",
-            // Limit by group keys was removed in bullmq 3.x
-            [BullMQAttributes.WORKER_RATE_LIMIT_GROUP]:
-              (this.opts?.limiter as any)?.groupKey ?? "none",
-          },
-          kind: SpanKind.INTERNAL,
-        });
-
-        return Instrumentation.withContext(this, original, span, args);
       };
     };
   }

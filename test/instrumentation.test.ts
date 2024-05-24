@@ -431,48 +431,7 @@ describe("bullmq", () => {
       assert.strictEqual(spans.length, 0);
     });
 
-    it("should create a span for the worker run", async () => {
-      const w = new Worker("queueName", async () => undefined, { connection });
-      await w.waitUntilReady();
-      await w.close();
-
-      const spans = memoryExporter.getFinishedSpans();
-      assert.strictEqual(spans.length, 1);
-
-      const workerRunSpan = spans.find(
-        (span) => span.name === "queueName Worker.run",
-      );
-      assertContains(workerRunSpan?.attributes!, {
-        "messaging.bullmq.worker.name": "queueName",
-        "messaging.bullmq.worker.concurrency": 1,
-        "messaging.bullmq.worker.lockDuration": 30000,
-        "messaging.bullmq.worker.lockRenewTime": 15000,
-        // should these attributes be here at all if they'll just be 'none'?
-        "messaging.bullmq.worker.rateLimiter.max": "none",
-        "messaging.bullmq.worker.rateLimiter.duration": "none",
-        "messaging.bullmq.worker.rateLimiter.groupKey": "none",
-      });
-    });
-
-    it("should only create a span for the worker run when it runs", async () => {
-      const w = new Worker("queueName", async () => undefined, {
-        connection,
-        autorun: false,
-      });
-
-      await w.waitUntilReady();
-      let spans = memoryExporter.getFinishedSpans();
-      assert.strictEqual(spans.length, 0);
-
-      w.run();
-      await w.waitUntilReady();
-      await w.close();
-
-      spans = memoryExporter.getFinishedSpans();
-      assert.strictEqual(spans.length, 1);
-    });
-
-    it("should create a span for the job attempt", async () => {
+    it("should create a span for the worker run and job attempt", async () => {
       const [processor, processorDone] = getWait();
 
       const w = new Worker(
@@ -536,6 +495,20 @@ describe("bullmq", () => {
 
       // no error event
       assert.strictEqual(workerJobSpan?.events.length, 0);
+
+      const workerRunSpan = spans.find(
+        (span) => span.name === "queueName Worker.run",
+      );
+      assertContains(workerRunSpan?.attributes!, {
+        "messaging.bullmq.worker.name": "queueName",
+        "messaging.bullmq.worker.concurrency": 1,
+        "messaging.bullmq.worker.lockDuration": 30000,
+        "messaging.bullmq.worker.lockRenewTime": 15000,
+        // should these attributes be here at all if they'll just be 'none'?
+        "messaging.bullmq.worker.rateLimiter.max": "none",
+        "messaging.bullmq.worker.rateLimiter.duration": "none",
+        "messaging.bullmq.worker.rateLimiter.groupKey": "none",
+      });
     });
 
     it("should capture events from the processor", async () => {

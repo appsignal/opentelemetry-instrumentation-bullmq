@@ -136,12 +136,13 @@ export class Instrumentation extends InstrumentationBase {
           kind: SpanKind.PRODUCER,
         });
         if (parentOpts) {
-          span.setAttributes(Instrumentation.dropInvalidAttributes({
-            [BullMQAttributes.JOB_PARENT_KEY]:
-              parentOpts.parentKey,
-            [BullMQAttributes.JOB_WAIT_CHILDREN_KEY]:
-              parentOpts.waitChildrenKey,
-          }));
+          span.setAttributes(
+            Instrumentation.dropInvalidAttributes({
+              [BullMQAttributes.JOB_PARENT_KEY]: parentOpts.parentKey,
+              [BullMQAttributes.JOB_WAIT_CHILDREN_KEY]:
+                parentOpts.waitChildrenKey,
+            }),
+          );
         }
         const parentContext = context.active();
         const messageContext = trace.setSpan(parentContext, span);
@@ -153,9 +154,11 @@ export class Instrumentation extends InstrumentationBase {
           } catch (e) {
             throw Instrumentation.setError(span, e as Error);
           } finally {
-            span.setAttributes(Instrumentation.dropInvalidAttributes({
-              [SemanticAttributes.MESSAGE_ID]: this.id,
-            }));
+            span.setAttributes(
+              Instrumentation.dropInvalidAttributes({
+                [SemanticAttributes.MESSAGE_ID]: this.id,
+              }),
+            );
             span.setAttribute(BullMQAttributes.JOB_TIMESTAMP, this.timestamp);
             span.end();
           }
@@ -306,19 +309,16 @@ export class Instrumentation extends InstrumentationBase {
               ...Instrumentation.attrMap(BullMQAttributes.JOB_OPTS, job.opts),
               [BullMQAttributes.QUEUE_NAME]: job.queueName,
               [BullMQAttributes.WORKER_NAME]: workerName,
-              [BullMQAttributes.WORKER_CONCURRENCY]:
-              this.opts?.concurrency,
-              [BullMQAttributes.WORKER_LOCK_DURATION]:
-                this.opts?.lockDuration,
-              [BullMQAttributes.WORKER_LOCK_RENEW]:
-                this.opts?.lockRenewTime,
-              [BullMQAttributes.WORKER_RATE_LIMIT_MAX]:
-                this.opts?.limiter?.max,
+              [BullMQAttributes.WORKER_CONCURRENCY]: this.opts?.concurrency,
+              [BullMQAttributes.WORKER_LOCK_DURATION]: this.opts?.lockDuration,
+              [BullMQAttributes.WORKER_LOCK_RENEW]: this.opts?.lockRenewTime,
+              [BullMQAttributes.WORKER_RATE_LIMIT_MAX]: this.opts?.limiter?.max,
               [BullMQAttributes.WORKER_RATE_LIMIT_DURATION]:
                 this.opts?.limiter?.duration,
               // Limit by group keys was removed in bullmq 3.x
-              [BullMQAttributes.WORKER_RATE_LIMIT_GROUP]:
-                (this.opts?.limiter as any)?.groupKey,
+              [BullMQAttributes.WORKER_RATE_LIMIT_GROUP]: (
+                this.opts?.limiter as any
+              )?.groupKey,
             }),
             kind: SpanKind.CONSUMER,
           },
@@ -362,13 +362,15 @@ export class Instrumentation extends InstrumentationBase {
     return function extendLock<T extends Fn>(original: T) {
       return function patch(this: Job, ...args: any): Promise<ReturnType<T>> {
         const span = trace.getSpan(context.active());
-        span?.addEvent("extendLock", Instrumentation.dropInvalidAttributes({
-          [BullMQAttributes.JOB_NAME]: this.name,
-          [BullMQAttributes.JOB_TIMESTAMP]: this.timestamp,
-          [BullMQAttributes.JOB_PROCESSED_TIMESTAMP]:
-            this.processedOn,
-          [BullMQAttributes.JOB_ATTEMPTS]: this.attemptsMade,
-        }));
+        span?.addEvent(
+          "extendLock",
+          Instrumentation.dropInvalidAttributes({
+            [BullMQAttributes.JOB_NAME]: this.name,
+            [BullMQAttributes.JOB_TIMESTAMP]: this.timestamp,
+            [BullMQAttributes.JOB_PROCESSED_TIMESTAMP]: this.processedOn,
+            [BullMQAttributes.JOB_ATTEMPTS]: this.attemptsMade,
+          }),
+        );
 
         return original.apply(this, args);
       };
@@ -379,13 +381,15 @@ export class Instrumentation extends InstrumentationBase {
     return function extendLock<T extends Fn>(original: T) {
       return function patch(this: Job, ...args: any): Promise<ReturnType<T>> {
         const span = trace.getSpan(context.active());
-        span?.addEvent("remove", Instrumentation.dropInvalidAttributes({
-          [BullMQAttributes.JOB_NAME]: this.name,
-          [BullMQAttributes.JOB_TIMESTAMP]: this.timestamp,
-          [BullMQAttributes.JOB_PROCESSED_TIMESTAMP]:
-            this.processedOn,
-          [BullMQAttributes.JOB_ATTEMPTS]: this.attemptsMade,
-        }));
+        span?.addEvent(
+          "remove",
+          Instrumentation.dropInvalidAttributes({
+            [BullMQAttributes.JOB_NAME]: this.name,
+            [BullMQAttributes.JOB_TIMESTAMP]: this.timestamp,
+            [BullMQAttributes.JOB_PROCESSED_TIMESTAMP]: this.processedOn,
+            [BullMQAttributes.JOB_ATTEMPTS]: this.attemptsMade,
+          }),
+        );
 
         return original.apply(this, args);
       };
@@ -396,13 +400,15 @@ export class Instrumentation extends InstrumentationBase {
     return function extendLock<T extends Fn>(original: T) {
       return function patch(this: Job, ...args: any): Promise<ReturnType<T>> {
         const span = trace.getSpan(context.active());
-        span?.addEvent("retry", Instrumentation.dropInvalidAttributes({
-          [BullMQAttributes.JOB_NAME]: this.name,
-          [BullMQAttributes.JOB_TIMESTAMP]: this.timestamp,
-          [BullMQAttributes.JOB_PROCESSED_TIMESTAMP]:
-            this.processedOn,
-          [BullMQAttributes.JOB_ATTEMPTS]: this.attemptsMade,
-        }));
+        span?.addEvent(
+          "retry",
+          Instrumentation.dropInvalidAttributes({
+            [BullMQAttributes.JOB_NAME]: this.name,
+            [BullMQAttributes.JOB_TIMESTAMP]: this.timestamp,
+            [BullMQAttributes.JOB_PROCESSED_TIMESTAMP]: this.processedOn,
+            [BullMQAttributes.JOB_ATTEMPTS]: this.attemptsMade,
+          }),
+        );
 
         return original.apply(this, args);
       };

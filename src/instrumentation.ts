@@ -260,13 +260,16 @@ export class Instrumentation extends InstrumentationBase {
     return function addBulk(original) {
       return async function patch(
         this: FlowProducer,
-        ...args
+        ...args: [FlowJob[], ...any]
       ): Promise<JobNode> {
         const spanName = `${action}`;
+        const names = args[0].map((job) => job.name);
         const span = tracer.startSpan(spanName, {
           attributes: {
             [SemanticAttributes.MESSAGING_SYSTEM]:
               BullMQAttributes.MESSAGING_SYSTEM,
+            [BullMQAttributes.JOB_BULK_NAMES]: names,
+            [BullMQAttributes.JOB_BULK_COUNT]: names.length,
           },
           kind: SpanKind.INTERNAL,
         });

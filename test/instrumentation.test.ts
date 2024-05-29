@@ -372,9 +372,8 @@ describe("bullmq", () => {
       );
       assert.notStrictEqual(flowProducerAddBulkSpan, undefined);
       assertContains(flowProducerAddBulkSpan?.attributes!, {
-        // TODO: bulk.count and bulk.names should be present?
-        // 'messaging.bullmq.job.bulk.names': ["jobName1", "jobName2"],
-        // 'messaging.bullmq.job.bulk.count': 2,
+        "messaging.bullmq.job.bulk.names": ["jobName1", "jobName2"],
+        "messaging.bullmq.job.bulk.count": 2,
       });
       assertDoesNotContain(flowProducerAddBulkSpan?.attributes!, [
         "messaging.destination",

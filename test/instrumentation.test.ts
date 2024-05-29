@@ -154,9 +154,9 @@ describe("bullmq", () => {
       // TODO: why is there no message ID?
       assertDoesNotContain(jobAddSpan?.attributes!, [
         "message.id",
-        'messaging.bullmq.job.parentOpts.parentKey',
-        'messaging.bullmq.job.parentOpts.flowChildrenKey'
-      ])
+        "messaging.bullmq.job.parentOpts.parentKey",
+        "messaging.bullmq.job.parentOpts.flowChildrenKey",
+      ]);
 
       assertSpanParent(jobAddSpan!, queueAddSpan!);
       assertRootSpan(queueAddSpan!);
@@ -274,9 +274,9 @@ describe("bullmq", () => {
         "string",
       );
       assertDoesNotContain(jobAddSpan?.attributes!, [
-        'messaging.bullmq.job.parentOpts.parentKey',
-        'messaging.bullmq.job.parentOpts.flowChildrenKey',
-      ])
+        "messaging.bullmq.job.parentOpts.parentKey",
+        "messaging.bullmq.job.parentOpts.flowChildrenKey",
+      ]);
 
       assertSpanParent(jobAddSpan!, flowProducerAddSpan!);
       assertRootSpan(flowProducerAddSpan!);
@@ -323,8 +323,8 @@ describe("bullmq", () => {
         "string",
       );
       assertDoesNotContain(jobAddSpan?.attributes!, [
-        'messaging.bullmq.job.parentOpts.parentKey',
-      ])
+        "messaging.bullmq.job.parentOpts.parentKey",
+      ]);
 
       const jobId = jobAddSpan?.attributes!["message.id"] as string;
 
@@ -351,8 +351,8 @@ describe("bullmq", () => {
       );
       assert.notStrictEqual(childJobAddSpan?.attributes!["message.id"], jobId);
       assertDoesNotContain(childJobAddSpan?.attributes!, [
-        'messaging.bullmq.job.parentOpts.waitChildrenKey',
-      ])
+        "messaging.bullmq.job.parentOpts.waitChildrenKey",
+      ]);
 
       assertSpanParent(jobAddSpan!, flowProducerAddSpan!);
       assertSpanParent(childJobAddSpan!, flowProducerAddSpan!);

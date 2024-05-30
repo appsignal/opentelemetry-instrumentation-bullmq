@@ -163,7 +163,7 @@ export class BullMQInstrumentation extends InstrumentationBase {
         let parentSpan = trace.getSpan(parentContext);
 
         if (parentSpan === undefined) {
-          // This should never happen.
+          // This can happen when `requireParentSpanForProducer` is true.
           return await original.apply(this, [client, parentOpts]);
         }
 
@@ -248,6 +248,13 @@ export class BullMQInstrumentation extends InstrumentationBase {
 
     return function add(original) {
       return async function patch(this: Queue, ...args: any): Promise<Job> {
+        if (
+          instrumentation.configFor("requireParentSpanForProducer") &&
+          trace.getSpan(context.active()) === undefined
+        ) {
+          return await original.apply(this, args);
+        }
+
         const [name] = [...args];
 
         const spanName = `${this.name}.${name} ${action}`;
@@ -270,6 +277,13 @@ export class BullMQInstrumentation extends InstrumentationBase {
         this: bullmq.Queue,
         ...args: [bullmq.Job[], ...any]
       ): Promise<bullmq.Job[]> {
+        if (
+          instrumentation.configFor("requireParentSpanForProducer") &&
+          trace.getSpan(context.active()) === undefined
+        ) {
+          return await original.apply(this, args);
+        }
+
         const names = args[0].map((job) => job.name);
 
         const spanName = `${this.name} ${action}`;
@@ -311,6 +325,13 @@ export class BullMQInstrumentation extends InstrumentationBase {
         flow: FlowJob,
         opts?: FlowOpts,
       ): Promise<JobNode> {
+        if (
+          instrumentation.configFor("requireParentSpanForProducer") &&
+          trace.getSpan(context.active()) === undefined
+        ) {
+          return await original.apply(this, [flow, opts]);
+        }
+
         const spanName = `${flow.queueName}.${flow.name} ${action}`;
         const spanKind = instrumentation.shouldCreateSpan({
           isBulk: false,
@@ -354,6 +375,13 @@ export class BullMQInstrumentation extends InstrumentationBase {
         this: FlowProducer,
         ...args: [FlowJob[], ...any]
       ): Promise<JobNode> {
+        if (
+          instrumentation.configFor("requireParentSpanForProducer") &&
+          trace.getSpan(context.active()) === undefined
+        ) {
+          return await original.apply(this, args);
+        }
+
         const spanName = `${action}`;
         const spanKind = instrumentation.shouldCreateSpan({
           isBulk: true,
@@ -410,7 +438,10 @@ export class BullMQInstrumentation extends InstrumentationBase {
             [BullMQAttributes.JOB_TIMESTAMP]: job.timestamp,
             [BullMQAttributes.JOB_DELAY]: job.delay,
             [BullMQAttributes.JOB_REPEAT_KEY]: job.repeatJobKey,
-            ...BullMQInstrumentation.attrMap(BullMQAttributes.JOB_OPTS, job.opts),
+            ...BullMQInstrumentation.attrMap(
+              BullMQAttributes.JOB_OPTS,
+              job.opts,
+            ),
             [BullMQAttributes.QUEUE_NAME]: job.queueName,
             [BullMQAttributes.WORKER_NAME]: workerName,
             [BullMQAttributes.WORKER_CONCURRENCY]: this.opts?.concurrency,

@@ -126,6 +126,7 @@ describe("bullmq", () => {
     context.setGlobalContextManager(contextManager);
     trace.setGlobalTracerProvider(provider);
     instrumentation.setTracerProvider(provider);
+    trace.setGlobalTracerProvider(provider);
     instrumentation.setConfig(defaultConfig);
     instrumentation.enable();
     propagation.setGlobalPropagator(new W3CTraceContextPropagator());
@@ -156,6 +157,62 @@ describe("bullmq", () => {
 
       const spans = memoryExporter.getFinishedSpans();
       assert.strictEqual(spans.length, 0);
+    });
+
+    describe("when requireParentSpanForProducer is true", async () => {
+      beforeEach(() => {
+        instrumentation.setConfig({ requireParentSpanForProducer: true });
+      });
+
+      it("should not create a queue span for add when there is no parent span", async () => {
+        const q = new Queue("queueName", { connection });
+        await q.add("jobName", { test: "yes" });
+
+        const spans = memoryExporter.getFinishedSpans();
+        assert.strictEqual(spans.length, 0);
+      });
+
+      it("should not create a queue span and job spans for addBulk when there is no parent span", async () => {
+        const q = new Queue("queueName", { connection });
+        await q.addBulk([
+          { name: "jobName1", data: { test: "yes" } },
+          { name: "jobName2", data: { test: "yes" } },
+        ]);
+
+        const spans = memoryExporter.getFinishedSpans();
+        assert.strictEqual(spans.length, 0);
+      });
+
+      it("should create a queue span for add when there is a parent span", async () => {
+        await trace
+          .getTracer("default")
+          .startActiveSpan("root", async (rootSpan) => {
+            const q = new Queue("queueName", { connection });
+            await q.add("jobName", { test: "yes" });
+
+            const spans = memoryExporter.getFinishedSpans();
+            assert.strictEqual(spans.length, 1);
+
+            rootSpan.end();
+          });
+      });
+
+      it("should create a queue span and many job spans for addBulk when there is a parent span", async () => {
+        await trace
+          .getTracer("default")
+          .startActiveSpan("root", async (rootSpan) => {
+            const q = new Queue("queueName", { connection });
+            await q.addBulk([
+              { name: "jobName1", data: { test: "yes" } },
+              { name: "jobName2", data: { test: "yes" } },
+            ]);
+
+            const spans = memoryExporter.getFinishedSpans();
+            assert.strictEqual(spans.length, 3);
+
+            rootSpan.end();
+          });
+      });
     });
 
     it("should create a queue span and no job span for add", async () => {
@@ -288,6 +345,88 @@ describe("bullmq", () => {
 
       const spans = memoryExporter.getFinishedSpans();
       assert.strictEqual(spans.length, 0);
+    });
+
+    describe("when requireParentSpanForProducer is true", async () => {
+      beforeEach(() => {
+        instrumentation.setConfig({ requireParentSpanForProducer: true });
+      });
+
+      it("should not create a queue span for add and job spans when there is no parent span", async () => {
+        const q = new FlowProducer({ connection });
+        await q.add({
+          name: "jobName",
+          queueName: "queueName",
+          children: [
+            {
+              name: "childJobName",
+              queueName: "childQueueName",
+            },
+          ],
+        });
+
+        const spans = memoryExporter.getFinishedSpans();
+        assert.strictEqual(spans.length, 0);
+      });
+
+      it("should not create a queue span and job spans for addBulk when there is no parent span", async () => {
+        const q = new FlowProducer({ connection });
+        await q.addBulk([
+          { name: "jobName1", queueName: "queueName", data: { test: "yes" } },
+          { name: "jobName2", queueName: "queueName", data: { test: "yes" } },
+        ]);
+
+        const spans = memoryExporter.getFinishedSpans();
+        assert.strictEqual(spans.length, 0);
+      });
+
+      it("should create a queue span for add and job spans when there is a parent span", async () => {
+        await trace
+          .getTracer("default")
+          .startActiveSpan("root", async (rootSpan) => {
+            const q = new FlowProducer({ connection });
+            await q.add({
+              name: "jobName",
+              queueName: "queueName",
+              children: [
+                {
+                  name: "childJobName",
+                  queueName: "childQueueName",
+                },
+              ],
+            });
+
+            const spans = memoryExporter.getFinishedSpans();
+            assert.strictEqual(spans.length, 3);
+
+            rootSpan.end();
+          });
+      });
+
+      it("should create a queue span and many job spans for addBulk when there is a parent span", async () => {
+        await trace
+          .getTracer("default")
+          .startActiveSpan("root", async (rootSpan) => {
+            const q = new FlowProducer({ connection });
+            await q.addBulk([
+              {
+                name: "jobName1",
+                queueName: "queueName",
+                data: { test: "yes" },
+              },
+              {
+                name: "jobName2",
+                queueName: "queueName",
+                data: { test: "yes" },
+              },
+            ]);
+
+            const spans = memoryExporter.getFinishedSpans();
+            assert.strictEqual(spans.length, 3);
+
+            rootSpan.end();
+          });
+      });
     });
 
     it("should create a queue span and a job span for add", async () => {

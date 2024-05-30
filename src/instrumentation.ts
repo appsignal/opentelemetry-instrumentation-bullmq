@@ -4,7 +4,7 @@ import {
   InstrumentationNodeModuleDefinition,
 } from "@opentelemetry/instrumentation";
 import { SemanticAttributes } from "@opentelemetry/semantic-conventions";
-import type { Attributes, Span } from "@opentelemetry/api";
+import type { Attributes, Link, Span } from "@opentelemetry/api";
 import {
   context,
   propagation,
@@ -293,66 +293,59 @@ export class Instrumentation extends InstrumentationBase {
       ) {
         const workerName = this.name ?? "anonymous";
         const currentContext = context.active();
-        const parentContext = propagation.extract(currentContext, job.opts);
+        const producerContext = propagation.extract(currentContext, job.opts);
 
         const spanName = `${job.queueName}.${job.name} Worker.${workerName} #${job.attemptsMade}`;
-        const span = tracer.startSpan(
-          spanName,
-          {
-            attributes: Instrumentation.dropInvalidAttributes({
-              [SemanticAttributes.MESSAGING_SYSTEM]:
-                BullMQAttributes.MESSAGING_SYSTEM,
-              [SemanticAttributes.MESSAGING_CONSUMER_ID]: workerName,
-              [SemanticAttributes.MESSAGING_MESSAGE_ID]: job.id,
-              [SemanticAttributes.MESSAGING_OPERATION]: "receive",
-              [BullMQAttributes.JOB_NAME]: job.name,
-              [BullMQAttributes.JOB_ATTEMPTS]: job.attemptsMade,
-              [BullMQAttributes.JOB_TIMESTAMP]: job.timestamp,
-              [BullMQAttributes.JOB_DELAY]: job.delay,
-              ...Instrumentation.attrMap(BullMQAttributes.JOB_OPTS, job.opts),
-              [BullMQAttributes.QUEUE_NAME]: job.queueName,
-              [BullMQAttributes.WORKER_NAME]: workerName,
-              [BullMQAttributes.WORKER_CONCURRENCY]: this.opts?.concurrency,
-              [BullMQAttributes.WORKER_LOCK_DURATION]: this.opts?.lockDuration,
-              [BullMQAttributes.WORKER_LOCK_RENEW]: this.opts?.lockRenewTime,
-              [BullMQAttributes.WORKER_RATE_LIMIT_MAX]: this.opts?.limiter?.max,
-              [BullMQAttributes.WORKER_RATE_LIMIT_DURATION]:
-                this.opts?.limiter?.duration,
-              // Limit by group keys was removed in bullmq 3.x
-              [BullMQAttributes.WORKER_RATE_LIMIT_GROUP]: (
-                this.opts?.limiter as any
-              )?.groupKey,
-            }),
-            kind: SpanKind.CONSUMER,
-          },
-          parentContext,
-        );
-        if (job.repeatJobKey)
-          span.setAttribute(BullMQAttributes.JOB_REPEAT_KEY, job.repeatJobKey);
-        const messageContext = trace.setSpan(parentContext, span);
+        const span = tracer.startSpan(spanName, {
+          attributes: Instrumentation.dropInvalidAttributes({
+            [SemanticAttributes.MESSAGING_SYSTEM]:
+              BullMQAttributes.MESSAGING_SYSTEM,
+            [SemanticAttributes.MESSAGING_CONSUMER_ID]: workerName,
+            [SemanticAttributes.MESSAGING_MESSAGE_ID]: job.id,
+            [SemanticAttributes.MESSAGING_OPERATION]: "receive",
+            [BullMQAttributes.JOB_NAME]: job.name,
+            [BullMQAttributes.JOB_ATTEMPTS]: job.attemptsMade,
+            [BullMQAttributes.JOB_TIMESTAMP]: job.timestamp,
+            [BullMQAttributes.JOB_DELAY]: job.delay,
+            [BullMQAttributes.JOB_REPEAT_KEY]: job.repeatJobKey,
+            ...Instrumentation.attrMap(BullMQAttributes.JOB_OPTS, job.opts),
+            [BullMQAttributes.QUEUE_NAME]: job.queueName,
+            [BullMQAttributes.WORKER_NAME]: workerName,
+            [BullMQAttributes.WORKER_CONCURRENCY]: this.opts?.concurrency,
+            [BullMQAttributes.WORKER_LOCK_DURATION]: this.opts?.lockDuration,
+            [BullMQAttributes.WORKER_LOCK_RENEW]: this.opts?.lockRenewTime,
+            [BullMQAttributes.WORKER_RATE_LIMIT_MAX]: this.opts?.limiter?.max,
+            [BullMQAttributes.WORKER_RATE_LIMIT_DURATION]:
+              this.opts?.limiter?.duration,
+            // Limit by group keys was removed in bullmq 3.x
+            [BullMQAttributes.WORKER_RATE_LIMIT_GROUP]: (
+              this.opts?.limiter as any
+            )?.groupKey,
+          }),
+          kind: SpanKind.CONSUMER,
+          links: Instrumentation.dropInvalidLinks([
+            {
+              context: trace.getSpanContext(producerContext),
+            },
+          ]),
+        });
 
-        return await context.with(messageContext, async () => {
+        const consumerContext = trace.setSpan(currentContext, span);
+
+        return await context.with(consumerContext, async () => {
           try {
             const result = await original.apply(this, [job, ...rest]);
             return result;
           } catch (e) {
             throw Instrumentation.setError(span, e as Error);
           } finally {
-            if (job.finishedOn)
-              span.setAttribute(
-                BullMQAttributes.JOB_FINISHED_TIMESTAMP,
-                job.finishedOn,
-              );
-            if (job.processedOn)
-              span.setAttribute(
-                BullMQAttributes.JOB_PROCESSED_TIMESTAMP,
-                job.processedOn,
-              );
-            if (job.failedReason)
-              span.setAttribute(
-                BullMQAttributes.JOB_FAILED_REASON,
-                job.failedReason,
-              );
+            span.setAttributes(
+              Instrumentation.dropInvalidAttributes({
+                [BullMQAttributes.JOB_FINISHED_TIMESTAMP]: job.finishedOn,
+                [BullMQAttributes.JOB_PROCESSED_TIMESTAMP]: job.processedOn,
+                [BullMQAttributes.JOB_FAILED_REASON]: job.failedReason,
+              }),
+            );
 
             span.end();
           }
@@ -458,5 +451,9 @@ export class Instrumentation extends InstrumentationBase {
     }
 
     return attributes;
+  }
+
+  private static dropInvalidLinks(links: Partial<Link>[]): Link[] {
+    return links.filter((link) => link.context !== undefined) as Link[];
   }
 }

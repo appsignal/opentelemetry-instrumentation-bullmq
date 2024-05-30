@@ -11,6 +11,7 @@ import {
   propagation,
   SpanKind,
   SpanStatusCode,
+  trace,
 } from "@opentelemetry/api";
 import { W3CTraceContextPropagator } from "@opentelemetry/core";
 import { AsyncHooksContextManager } from "@opentelemetry/context-async-hooks";
@@ -44,18 +45,44 @@ function getWait(): [Promise<any>, Function, Function] {
 }
 
 // function printSpans(spans: ReadableSpan[]) {
-//   console.log(spans.map(span => ({
-//     name: span.name,
-//     parent: spans.find(s => s.spanContext().spanId === span.parentSpanId)?.name,
-//     trace: span.spanContext().traceId,
-//     kind: SpanKind[span.kind],
-//     attributes: span.attributes,
-//     events: span.events,
-//   })))
+//   const util = require("util");
+//   console.log(
+//     util.inspect(
+//       spans.map((span) => ({
+//         name: span.name,
+//         parent: spans.find((s) => s.spanContext().spanId === span.parentSpanId)
+//           ?.name,
+//         trace: span.spanContext().traceId,
+//         kind: SpanKind[span.kind],
+//         attributes: span.attributes,
+//         events: span.events,
+//         links: span.links,
+//       })),
+//       { depth: null },
+//     ),
+//   );
 // }
 
 function assertSpanParent(span: ReadableSpan, parent: ReadableSpan) {
   assert.strictEqual(span.parentSpanId, parent.spanContext().spanId);
+}
+
+function assertDifferentTrace(span: ReadableSpan, parent: ReadableSpan) {
+  assert.notStrictEqual(span.parentSpanId, parent.spanContext().spanId);
+  assert.notStrictEqual(
+    span.spanContext().traceId,
+    parent.spanContext().traceId,
+  );
+}
+
+function assertSpanLink(span: ReadableSpan, linked: ReadableSpan) {
+  assert.ok(
+    span.links.some(
+      (link) =>
+        link.context.spanId === linked.spanContext().spanId &&
+        link.context.traceId === linked.spanContext().traceId,
+    ),
+  );
 }
 
 function assertRootSpan(span: ReadableSpan) {
@@ -93,6 +120,7 @@ describe("bullmq", () => {
   beforeEach(() => {
     contextManager.enable();
     context.setGlobalContextManager(contextManager);
+    trace.setGlobalTracerProvider(provider);
     instrumentation.setTracerProvider(provider);
     instrumentation.enable();
     propagation.setGlobalPropagator(new W3CTraceContextPropagator());
@@ -108,7 +136,7 @@ describe("bullmq", () => {
   });
 
   afterEach(() => {
-    // printSpans(memoryExporter.getFinishedSpans())
+    // printSpans(memoryExporter.getFinishedSpans());
     contextManager.disable();
     contextManager.enable();
     memoryExporter.reset();
@@ -453,7 +481,8 @@ describe("bullmq", () => {
       );
       assert.notStrictEqual(workerJobSpan, undefined);
       assert.strictEqual(workerJobSpan?.kind, SpanKind.CONSUMER);
-      assertSpanParent(workerJobSpan!, jobAddSpan!);
+      assertDifferentTrace(workerJobSpan!, jobAddSpan!);
+      assertSpanLink(workerJobSpan!, jobAddSpan!);
       assertContains(workerJobSpan?.attributes!, {
         "messaging.consumer_id": "queueName",
         "messaging.message_id": "1",
@@ -487,6 +516,40 @@ describe("bullmq", () => {
 
       // no error event
       assert.strictEqual(workerJobSpan?.events.length, 0);
+    });
+
+    it("should set the right active context for the job attempt", async () => {
+      const [processor, processorDone] = getWait();
+
+      const w = new Worker(
+        "queueName",
+        async () => {
+          trace
+            .getTracer("test-tracer")
+            .startActiveSpan("inside job", (span) => span.end());
+          processorDone();
+          return { completed: new Date().toTimeString() };
+        },
+        { connection },
+      );
+      await w.waitUntilReady();
+
+      const q = new Queue("queueName", { connection });
+      await q.add("testJob", { test: "yes" });
+
+      await processor;
+      await w.close();
+
+      const spans = memoryExporter.getFinishedSpans();
+      const workerJobSpan = spans.find((span) =>
+        span.name.includes("queueName.testJob Worker.queueName"),
+      );
+      assert.notStrictEqual(workerJobSpan, undefined);
+
+      const insideJobSpan = spans.find((span) => span.name === "inside job");
+      assert.notStrictEqual(insideJobSpan, undefined);
+
+      assertSpanParent(insideJobSpan!, workerJobSpan!);
     });
 
     it("should capture events from the processor", async () => {

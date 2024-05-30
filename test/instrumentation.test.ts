@@ -153,40 +153,31 @@ describe("bullmq", () => {
       assert.strictEqual(spans.length, 0);
     });
 
-    it("should create a queue span and a job span for add", async () => {
+    it("should create a queue span and no job span for add", async () => {
       const q = new Queue("queueName", { connection });
       await q.add("jobName", { test: "yes" });
 
       const spans = memoryExporter.getFinishedSpans();
-      assert.strictEqual(spans.length, 2);
+      assert.strictEqual(spans.length, 1);
       spans.forEach(assertMessagingSystem);
 
       const queueAddSpan = spans.find(
         (span) => span.name === "queueName.jobName Queue.add",
       );
       assert.notStrictEqual(queueAddSpan, undefined);
+      assert.strictEqual(queueAddSpan?.kind, SpanKind.PRODUCER);
       assertContains(queueAddSpan?.attributes!, {
         "messaging.destination": "queueName",
         "messaging.bullmq.job.name": "jobName",
       });
 
-      const jobAddSpan = spans.find(
-        (span) => span.name === "queueName.jobName Job.addJob",
-      );
-      assert.notStrictEqual(jobAddSpan, undefined);
-      assert.strictEqual(jobAddSpan?.kind, SpanKind.PRODUCER);
-      assertContains(jobAddSpan?.attributes!, {
-        "messaging.destination": "queueName",
-        "messaging.bullmq.job.name": "jobName",
-      });
       // TODO: why is there no message ID?
-      assertDoesNotContain(jobAddSpan?.attributes!, [
+      assertDoesNotContain(queueAddSpan?.attributes!, [
         "message.id",
         "messaging.bullmq.job.parentOpts.parentKey",
         "messaging.bullmq.job.parentOpts.flowChildrenKey",
       ]);
 
-      assertSpanParent(jobAddSpan!, queueAddSpan!);
       assertRootSpan(queueAddSpan!);
     });
 
@@ -195,11 +186,11 @@ describe("bullmq", () => {
       await q.add("jobName", { test: "yes" }, { jobId: "foobar" });
 
       const spans = memoryExporter.getFinishedSpans();
-      const jobAddSpan = spans.find(
-        (span) => span.name === "queueName.jobName Job.addJob",
+      const queueAddSpan = spans.find(
+        (span) => span.name === "queueName.jobName Queue.add",
       );
-      assert.notStrictEqual(jobAddSpan, undefined);
-      assertContains(jobAddSpan?.attributes!, {
+      assert.notStrictEqual(queueAddSpan, undefined);
+      assertContains(queueAddSpan?.attributes!, {
         "messaging.bullmq.job.name": "jobName",
         "message.id": "foobar",
       });
@@ -210,11 +201,11 @@ describe("bullmq", () => {
       await q.add("jobName", { test: "yes" }, { delay: 1000 });
 
       const spans = memoryExporter.getFinishedSpans();
-      const jobAddSpan = spans.find(
-        (span) => span.name === "queueName.jobName Job.addJob",
+      const queueAddSpan = spans.find(
+        (span) => span.name === "queueName.jobName Queue.add",
       );
-      assert.notStrictEqual(jobAddSpan, undefined);
-      assertContains(jobAddSpan?.attributes!, {
+      assert.notStrictEqual(queueAddSpan, undefined);
+      assertContains(queueAddSpan?.attributes!, {
         "messaging.bullmq.job.opts.delay": 1000,
       });
     });
@@ -468,21 +459,21 @@ describe("bullmq", () => {
       await w.close();
 
       const spans = memoryExporter.getFinishedSpans();
-      assert.strictEqual(spans.length, 3);
+      assert.strictEqual(spans.length, 2);
       spans.forEach(assertMessagingSystem);
 
-      const jobAddSpan = spans.find(
-        (span) => span.name === "queueName.testJob Job.addJob",
+      const queueAddSpan = spans.find(
+        (span) => span.name === "queueName.testJob Queue.add",
       );
-      assert.notStrictEqual(jobAddSpan, undefined);
+      assert.notStrictEqual(queueAddSpan, undefined);
 
       const workerJobSpan = spans.find((span) =>
         span.name.includes("queueName.testJob Worker.queueName"),
       );
       assert.notStrictEqual(workerJobSpan, undefined);
       assert.strictEqual(workerJobSpan?.kind, SpanKind.CONSUMER);
-      assertDifferentTrace(workerJobSpan!, jobAddSpan!);
-      assertSpanLink(workerJobSpan!, jobAddSpan!);
+      assertDifferentTrace(workerJobSpan!, queueAddSpan!);
+      assertSpanLink(workerJobSpan!, queueAddSpan!);
       assertContains(workerJobSpan?.attributes!, {
         "messaging.consumer_id": "queueName",
         "messaging.message_id": "1",
@@ -642,7 +633,7 @@ describe("bullmq", () => {
       await w.close();
 
       const spans = memoryExporter.getFinishedSpans();
-      assert.strictEqual(spans.length, 4);
+      assert.strictEqual(spans.length, 3);
       spans.forEach(assertMessagingSystem);
 
       const jobSpans = spans.filter((span) =>

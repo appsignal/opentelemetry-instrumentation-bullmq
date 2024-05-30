@@ -30,6 +30,8 @@ import { VERSION } from "./version";
 import { BullMQAttributes } from "./attributes";
 
 declare type Fn = (...args: any[]) => any;
+const BULK_CONTEXT = Symbol("BULLMQ_BULK_CONTEXT");
+const FLOW_CONTEXT = Symbol("BULLMQ_FLOW_CONTEXT");
 
 export class Instrumentation extends InstrumentationBase {
   constructor(config: InstrumentationConfig = {}) {
@@ -123,28 +125,43 @@ export class Instrumentation extends InstrumentationBase {
         client: never,
         parentOpts?: ParentOpts,
       ): Promise<string> {
-        const spanName = `${this.queueName}.${this.name} ${action}`;
-        // this.opts = this.opts ?? {};
-        const span = tracer.startSpan(spanName, {
-          attributes: {
+        const parentContext = context.active();
+        let parentSpan = trace.getSpan(parentContext);
+
+        if (parentSpan === undefined) {
+          // This should never happen.
+          return await original.apply(this, [client, parentOpts])
+        }
+
+        const shouldCreateSpan = (
+          parentContext.getValue(BULK_CONTEXT) ||
+          parentContext.getValue(FLOW_CONTEXT)
+        );
+
+        let childSpan: Span | undefined;
+
+        if (shouldCreateSpan) {
+          const spanName = `${this.queueName}.${this.name} ${action}`;
+          childSpan = tracer.startSpan(spanName, {
+            kind: SpanKind.PRODUCER,
+          });
+        }
+
+        let span = childSpan ?? parentSpan;
+
+        span.setAttributes(
+          Instrumentation.dropInvalidAttributes({
             [SemanticAttributes.MESSAGING_SYSTEM]:
               BullMQAttributes.MESSAGING_SYSTEM,
             [SemanticAttributes.MESSAGING_DESTINATION]: this.queueName,
             [BullMQAttributes.JOB_NAME]: this.name,
+            [BullMQAttributes.JOB_PARENT_KEY]: parentOpts?.parentKey,
+            [BullMQAttributes.JOB_WAIT_CHILDREN_KEY]:
+              parentOpts?.waitChildrenKey,
             ...Instrumentation.attrMap(BullMQAttributes.JOB_OPTS, this.opts),
-          },
-          kind: SpanKind.PRODUCER,
-        });
-        if (parentOpts) {
-          span.setAttributes(
-            Instrumentation.dropInvalidAttributes({
-              [BullMQAttributes.JOB_PARENT_KEY]: parentOpts.parentKey,
-              [BullMQAttributes.JOB_WAIT_CHILDREN_KEY]:
-                parentOpts.waitChildrenKey,
-            }),
-          );
-        }
-        const parentContext = context.active();
+          })
+        )
+
         const messageContext = trace.setSpan(parentContext, span);
 
         propagation.inject(messageContext, this.opts);
@@ -178,13 +195,7 @@ export class Instrumentation extends InstrumentationBase {
 
         const spanName = `${this.name}.${name} ${action}`;
         const span = tracer.startSpan(spanName, {
-          attributes: {
-            [SemanticAttributes.MESSAGING_SYSTEM]:
-              BullMQAttributes.MESSAGING_SYSTEM,
-            [SemanticAttributes.MESSAGING_DESTINATION]: this.name,
-            [BullMQAttributes.JOB_NAME]: name,
-          },
-          kind: SpanKind.INTERNAL,
+          kind: SpanKind.PRODUCER,
         });
 
         return Instrumentation.withContext(this, original, span, args);
@@ -216,7 +227,9 @@ export class Instrumentation extends InstrumentationBase {
           kind: SpanKind.INTERNAL,
         });
 
-        return Instrumentation.withContext(this, original, span, args);
+        return Instrumentation.withContext(this, original, span, args, {
+          [BULK_CONTEXT]: true,
+        });
       };
     };
   }
@@ -245,7 +258,9 @@ export class Instrumentation extends InstrumentationBase {
           kind: SpanKind.INTERNAL,
         });
 
-        return Instrumentation.withContext(this, original, span, [flow, opts]);
+        return Instrumentation.withContext(this, original, span, [flow, opts], {
+          [FLOW_CONTEXT]: true,
+        });
       };
     };
   }
@@ -274,7 +289,10 @@ export class Instrumentation extends InstrumentationBase {
           kind: SpanKind.INTERNAL,
         });
 
-        return Instrumentation.withContext(this, original, span, args);
+        return Instrumentation.withContext(this, original, span, args, {
+          [FLOW_CONTEXT]: true,
+          [BULK_CONTEXT]: true,
+        });
       };
     };
   }
@@ -427,9 +445,14 @@ export class Instrumentation extends InstrumentationBase {
     original: Function,
     span: Span,
     args: any[],
+    contextValues: Record<symbol, unknown> = {}
   ): Promise<any> {
     const parentContext = context.active();
-    const messageContext = trace.setSpan(parentContext, span);
+    let messageContext = trace.setSpan(parentContext, span);
+
+    for (const key of Object.getOwnPropertySymbols(contextValues)) {
+      messageContext = messageContext.setValue(key, contextValues[key]);
+    }
 
     return await context.with(messageContext, async () => {
       try {

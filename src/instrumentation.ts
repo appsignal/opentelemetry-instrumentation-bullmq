@@ -33,9 +33,43 @@ declare type Fn = (...args: any[]) => any;
 const BULK_CONTEXT = Symbol("BULLMQ_BULK_CONTEXT");
 const FLOW_CONTEXT = Symbol("BULLMQ_FLOW_CONTEXT");
 
-export class Instrumentation extends InstrumentationBase {
-  constructor(config: InstrumentationConfig = {}) {
+export interface BullMQInstrumentationConfig extends InstrumentationConfig {
+  /**
+   * Emit spans for each individual job enqueueing in calls to `Queue.addBulk`
+   * or `FlowProducer.addBulk`. Defaults to true. Setting it to false disables
+   * individual job spans for bulk operations.
+   */
+  emitJobSpansForBulk?: boolean;
+
+  /**
+   * Emit spans for each individual job enqueueing in calls to `FlowProducer.add`
+   * or `FlowProducer.addBulk`. Defaults to true. Setting it to false disables
+   * individual job spans for bulk operations.
+   */
+  emitJobSpansForFlow?: boolean;
+
+  /** Require a parent span in order to create a producer span
+   * (a span for the enqueueing of one or more jobs) -- defaults to `false` */
+  requireParentSpanForProducer?: boolean;
+}
+
+export const defaultConfig: Required<BullMQInstrumentationConfig> = {
+  emitJobSpansForBulk: true,
+  emitJobSpansForFlow: true,
+  requireParentSpanForProducer: false,
+  // unused by `configFor` but required for the type
+  enabled: true,
+};
+
+export class BullMQInstrumentation extends InstrumentationBase {
+  protected override _config!: BullMQInstrumentationConfig;
+
+  constructor(config: BullMQInstrumentationConfig = {}) {
     super("opentelemetry-instrumentation-bullmq", VERSION, config);
+  }
+
+  override setConfig(config?: BullMQInstrumentationConfig) {
+    super.setConfig(config);
   }
 
   /**
@@ -130,13 +164,27 @@ export class Instrumentation extends InstrumentationBase {
 
         if (parentSpan === undefined) {
           // This should never happen.
-          return await original.apply(this, [client, parentOpts])
+          return await original.apply(this, [client, parentOpts]);
         }
 
-        const shouldCreateSpan = (
-          parentContext.getValue(BULK_CONTEXT) ||
-          parentContext.getValue(FLOW_CONTEXT)
-        );
+        const isBulk: boolean = !!parentContext.getValue(BULK_CONTEXT);
+        const isFlow: boolean = !!parentContext.getValue(FLOW_CONTEXT);
+
+        let shouldSetAttributes = true;
+
+        if (!instrumentation.shouldCreateSpan({ isBulk, isFlow })) {
+          // If the configuration says that no individual job spans
+          // should be created for this bulk/flow span, do not set
+          // attributes in the parent span either.
+          // This differs from the behaviour when the span is neither
+          // bulk nor flow, in which case we do write attributes into
+          // the parent span.
+          shouldSetAttributes = false;
+        }
+
+        const shouldCreateSpan =
+          (isBulk || isFlow) &&
+          instrumentation.shouldCreateSpan({ isBulk, isFlow });
 
         let childSpan: Span | undefined;
 
@@ -149,18 +197,23 @@ export class Instrumentation extends InstrumentationBase {
 
         let span = childSpan ?? parentSpan;
 
-        span.setAttributes(
-          Instrumentation.dropInvalidAttributes({
-            [SemanticAttributes.MESSAGING_SYSTEM]:
-              BullMQAttributes.MESSAGING_SYSTEM,
-            [SemanticAttributes.MESSAGING_DESTINATION]: this.queueName,
-            [BullMQAttributes.JOB_NAME]: this.name,
-            [BullMQAttributes.JOB_PARENT_KEY]: parentOpts?.parentKey,
-            [BullMQAttributes.JOB_WAIT_CHILDREN_KEY]:
-              parentOpts?.waitChildrenKey,
-            ...Instrumentation.attrMap(BullMQAttributes.JOB_OPTS, this.opts),
-          })
-        )
+        if (shouldSetAttributes) {
+          span.setAttributes(
+            BullMQInstrumentation.dropInvalidAttributes({
+              [SemanticAttributes.MESSAGING_SYSTEM]:
+                BullMQAttributes.MESSAGING_SYSTEM,
+              [SemanticAttributes.MESSAGING_DESTINATION]: this.queueName,
+              [BullMQAttributes.JOB_NAME]: this.name,
+              [BullMQAttributes.JOB_PARENT_KEY]: parentOpts?.parentKey,
+              [BullMQAttributes.JOB_WAIT_CHILDREN_KEY]:
+                parentOpts?.waitChildrenKey,
+              ...BullMQInstrumentation.attrMap(
+                BullMQAttributes.JOB_OPTS,
+                this.opts,
+              ),
+            }),
+          );
+        }
 
         const messageContext = trace.setSpan(parentContext, span);
 
@@ -169,15 +222,19 @@ export class Instrumentation extends InstrumentationBase {
           try {
             return await original.apply(this, [client, parentOpts]);
           } catch (e) {
-            throw Instrumentation.setError(span, e as Error);
+            throw BullMQInstrumentation.setError(span, e as Error);
           } finally {
-            span.setAttributes(
-              Instrumentation.dropInvalidAttributes({
-                [SemanticAttributes.MESSAGE_ID]: this.id,
-              }),
-            );
-            span.setAttribute(BullMQAttributes.JOB_TIMESTAMP, this.timestamp);
-            span.end();
+            if (shouldSetAttributes) {
+              span.setAttributes(
+                BullMQInstrumentation.dropInvalidAttributes({
+                  [SemanticAttributes.MESSAGE_ID]: this.id,
+                  [BullMQAttributes.JOB_TIMESTAMP]: this.timestamp,
+                }),
+              );
+            }
+            if (shouldCreateSpan) {
+              span.end();
+            }
           }
         });
       };
@@ -198,7 +255,7 @@ export class Instrumentation extends InstrumentationBase {
           kind: SpanKind.PRODUCER,
         });
 
-        return Instrumentation.withContext(this, original, span, args);
+        return BullMQInstrumentation.withContext(this, original, span, args);
       };
     };
   }
@@ -216,6 +273,13 @@ export class Instrumentation extends InstrumentationBase {
         const names = args[0].map((job) => job.name);
 
         const spanName = `${this.name} ${action}`;
+        const spanKind = instrumentation.shouldCreateSpan({
+          isBulk: true,
+          isFlow: false,
+        })
+          ? SpanKind.INTERNAL
+          : SpanKind.PRODUCER;
+
         const span = tracer.startSpan(spanName, {
           attributes: {
             [SemanticAttributes.MESSAGING_SYSTEM]:
@@ -224,10 +288,10 @@ export class Instrumentation extends InstrumentationBase {
             [BullMQAttributes.JOB_BULK_NAMES]: names,
             [BullMQAttributes.JOB_BULK_COUNT]: names.length,
           },
-          kind: SpanKind.INTERNAL,
+          kind: spanKind,
         });
 
-        return Instrumentation.withContext(this, original, span, args, {
+        return BullMQInstrumentation.withContext(this, original, span, args, {
           [BULK_CONTEXT]: true,
         });
       };
@@ -248,6 +312,13 @@ export class Instrumentation extends InstrumentationBase {
         opts?: FlowOpts,
       ): Promise<JobNode> {
         const spanName = `${flow.queueName}.${flow.name} ${action}`;
+        const spanKind = instrumentation.shouldCreateSpan({
+          isBulk: false,
+          isFlow: true,
+        })
+          ? SpanKind.INTERNAL
+          : SpanKind.PRODUCER;
+
         const span = tracer.startSpan(spanName, {
           attributes: {
             [SemanticAttributes.MESSAGING_SYSTEM]:
@@ -255,12 +326,18 @@ export class Instrumentation extends InstrumentationBase {
             [SemanticAttributes.MESSAGING_DESTINATION]: flow.queueName,
             [BullMQAttributes.JOB_NAME]: flow.name,
           },
-          kind: SpanKind.INTERNAL,
+          kind: spanKind,
         });
 
-        return Instrumentation.withContext(this, original, span, [flow, opts], {
-          [FLOW_CONTEXT]: true,
-        });
+        return BullMQInstrumentation.withContext(
+          this,
+          original,
+          span,
+          [flow, opts],
+          {
+            [FLOW_CONTEXT]: true,
+          },
+        );
       };
     };
   }
@@ -278,6 +355,13 @@ export class Instrumentation extends InstrumentationBase {
         ...args: [FlowJob[], ...any]
       ): Promise<JobNode> {
         const spanName = `${action}`;
+        const spanKind = instrumentation.shouldCreateSpan({
+          isBulk: true,
+          isFlow: true,
+        })
+          ? SpanKind.INTERNAL
+          : SpanKind.PRODUCER;
+
         const names = args[0].map((job) => job.name);
         const span = tracer.startSpan(spanName, {
           attributes: {
@@ -286,10 +370,10 @@ export class Instrumentation extends InstrumentationBase {
             [BullMQAttributes.JOB_BULK_NAMES]: names,
             [BullMQAttributes.JOB_BULK_COUNT]: names.length,
           },
-          kind: SpanKind.INTERNAL,
+          kind: spanKind,
         });
 
-        return Instrumentation.withContext(this, original, span, args, {
+        return BullMQInstrumentation.withContext(this, original, span, args, {
           [FLOW_CONTEXT]: true,
           [BULK_CONTEXT]: true,
         });
@@ -315,7 +399,7 @@ export class Instrumentation extends InstrumentationBase {
 
         const spanName = `${job.queueName}.${job.name} Worker.${workerName} #${job.attemptsMade}`;
         const span = tracer.startSpan(spanName, {
-          attributes: Instrumentation.dropInvalidAttributes({
+          attributes: BullMQInstrumentation.dropInvalidAttributes({
             [SemanticAttributes.MESSAGING_SYSTEM]:
               BullMQAttributes.MESSAGING_SYSTEM,
             [SemanticAttributes.MESSAGING_CONSUMER_ID]: workerName,
@@ -326,7 +410,7 @@ export class Instrumentation extends InstrumentationBase {
             [BullMQAttributes.JOB_TIMESTAMP]: job.timestamp,
             [BullMQAttributes.JOB_DELAY]: job.delay,
             [BullMQAttributes.JOB_REPEAT_KEY]: job.repeatJobKey,
-            ...Instrumentation.attrMap(BullMQAttributes.JOB_OPTS, job.opts),
+            ...BullMQInstrumentation.attrMap(BullMQAttributes.JOB_OPTS, job.opts),
             [BullMQAttributes.QUEUE_NAME]: job.queueName,
             [BullMQAttributes.WORKER_NAME]: workerName,
             [BullMQAttributes.WORKER_CONCURRENCY]: this.opts?.concurrency,
@@ -341,7 +425,7 @@ export class Instrumentation extends InstrumentationBase {
             )?.groupKey,
           }),
           kind: SpanKind.CONSUMER,
-          links: Instrumentation.dropInvalidLinks([
+          links: BullMQInstrumentation.dropInvalidLinks([
             {
               context: trace.getSpanContext(producerContext),
             },
@@ -355,10 +439,10 @@ export class Instrumentation extends InstrumentationBase {
             const result = await original.apply(this, [job, ...rest]);
             return result;
           } catch (e) {
-            throw Instrumentation.setError(span, e as Error);
+            throw BullMQInstrumentation.setError(span, e as Error);
           } finally {
             span.setAttributes(
-              Instrumentation.dropInvalidAttributes({
+              BullMQInstrumentation.dropInvalidAttributes({
                 [BullMQAttributes.JOB_FINISHED_TIMESTAMP]: job.finishedOn,
                 [BullMQAttributes.JOB_PROCESSED_TIMESTAMP]: job.processedOn,
                 [BullMQAttributes.JOB_FAILED_REASON]: job.failedReason,
@@ -378,7 +462,7 @@ export class Instrumentation extends InstrumentationBase {
         const span = trace.getSpan(context.active());
         span?.addEvent(
           "extendLock",
-          Instrumentation.dropInvalidAttributes({
+          BullMQInstrumentation.dropInvalidAttributes({
             [BullMQAttributes.JOB_NAME]: this.name,
             [BullMQAttributes.JOB_TIMESTAMP]: this.timestamp,
             [BullMQAttributes.JOB_PROCESSED_TIMESTAMP]: this.processedOn,
@@ -397,7 +481,7 @@ export class Instrumentation extends InstrumentationBase {
         const span = trace.getSpan(context.active());
         span?.addEvent(
           "remove",
-          Instrumentation.dropInvalidAttributes({
+          BullMQInstrumentation.dropInvalidAttributes({
             [BullMQAttributes.JOB_NAME]: this.name,
             [BullMQAttributes.JOB_TIMESTAMP]: this.timestamp,
             [BullMQAttributes.JOB_PROCESSED_TIMESTAMP]: this.processedOn,
@@ -416,7 +500,7 @@ export class Instrumentation extends InstrumentationBase {
         const span = trace.getSpan(context.active());
         span?.addEvent(
           "retry",
-          Instrumentation.dropInvalidAttributes({
+          BullMQInstrumentation.dropInvalidAttributes({
             [BullMQAttributes.JOB_NAME]: this.name,
             [BullMQAttributes.JOB_TIMESTAMP]: this.timestamp,
             [BullMQAttributes.JOB_PROCESSED_TIMESTAMP]: this.processedOn,
@@ -427,6 +511,36 @@ export class Instrumentation extends InstrumentationBase {
         return original.apply(this, args);
       };
     };
+  }
+
+  private configFor<K extends keyof BullMQInstrumentationConfig>(
+    key: K,
+  ): Required<BullMQInstrumentationConfig>[K] {
+    return this._config[key] ?? defaultConfig[key];
+  }
+
+  // Return whether, according to the configuration, a span should be created
+  // for each job enqueued by the given kind (bulk, flow, both or neither)
+  // of operation.
+  private shouldCreateSpan({
+    isBulk,
+    isFlow,
+  }: {
+    isBulk: boolean;
+    isFlow: boolean;
+  }): boolean {
+    if (isBulk && isFlow) {
+      return (
+        this.configFor("emitJobSpansForBulk") &&
+        this.configFor("emitJobSpansForFlow")
+      );
+    } else if (isBulk) {
+      return this.configFor("emitJobSpansForBulk");
+    } else if (isFlow) {
+      return this.configFor("emitJobSpansForFlow");
+    } else {
+      return true;
+    }
   }
 
   private static setError = (span: Span, error: Error) => {
@@ -445,7 +559,7 @@ export class Instrumentation extends InstrumentationBase {
     original: Function,
     span: Span,
     args: any[],
-    contextValues: Record<symbol, unknown> = {}
+    contextValues: Record<symbol, unknown> = {},
   ): Promise<any> {
     const parentContext = context.active();
     let messageContext = trace.setSpan(parentContext, span);
@@ -458,7 +572,7 @@ export class Instrumentation extends InstrumentationBase {
       try {
         return await original.apply(thisArg, ...[args]);
       } catch (e) {
-        throw Instrumentation.setError(span, e as Error);
+        throw BullMQInstrumentation.setError(span, e as Error);
       } finally {
         span.end();
       }

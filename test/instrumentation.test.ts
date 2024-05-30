@@ -25,6 +25,10 @@ import type * as bullmq from "bullmq";
 
 import { BullMQInstrumentation } from "../src";
 import IORedis from "ioredis";
+import {
+  BullMQInstrumentationConfig,
+  defaultConfig,
+} from "../src/instrumentation";
 
 // rewiremock.disable();
 
@@ -122,6 +126,7 @@ describe("bullmq", () => {
     context.setGlobalContextManager(contextManager);
     trace.setGlobalTracerProvider(provider);
     instrumentation.setTracerProvider(provider);
+    instrumentation.setConfig(defaultConfig);
     instrumentation.enable();
     propagation.setGlobalPropagator(new W3CTraceContextPropagator());
 
@@ -154,6 +159,13 @@ describe("bullmq", () => {
     });
 
     it("should create a queue span and no job span for add", async () => {
+      // These configuration options should not affect its behaviour, as this
+      // is neither a bulk operation nor a flow operation.
+      instrumentation.setConfig({
+        emitJobSpansForBulk: false,
+        emitJobSpansForFlow: false,
+      });
+
       const q = new Queue("queueName", { connection });
       await q.add("jobName", { test: "yes" });
 
@@ -249,6 +261,25 @@ describe("bullmq", () => {
     });
   });
 
+  it("should not create any job spans for addBulk when emitJobSpansForBulk is false", async () => {
+    instrumentation.setConfig({ emitJobSpansForBulk: false });
+
+    const q = new Queue("queueName", { connection });
+    await q.addBulk([
+      { name: "jobName1", data: { test: "yes" } },
+      { name: "jobName2", data: { test: "yes" } },
+    ]);
+
+    const spans = memoryExporter.getFinishedSpans();
+    assert.strictEqual(spans.length, 1);
+    spans.forEach(assertMessagingSystem);
+
+    const queueAddBulkSpan = spans.find(
+      (span) => span.name === "queueName Queue.addBulk",
+    );
+    assert.notStrictEqual(queueAddBulkSpan, undefined);
+  });
+
   describe("FlowProducer", () => {
     it("should not generate any spans when disabled", async () => {
       instrumentation.disable();
@@ -299,6 +330,10 @@ describe("bullmq", () => {
     });
 
     it("should create a queue span and many job spans for add with children", async () => {
+      // This configuration option should not affect its behaviour, as this is
+      // not a bulk operation, but a flow operation.
+      instrumentation.setConfig({ emitJobSpansForBulk: false });
+
       const q = new FlowProducer({ connection });
       await q.add({
         name: "jobName",
@@ -319,6 +354,7 @@ describe("bullmq", () => {
         (span) => span.name === "queueName.jobName FlowProducer.add",
       );
       assert.notStrictEqual(flowProducerAddSpan, undefined);
+      assert.strictEqual(flowProducerAddSpan?.kind, SpanKind.INTERNAL);
       assertContains(flowProducerAddSpan?.attributes!, {
         "messaging.destination": "queueName",
         "messaging.bullmq.job.name": "jobName",
@@ -328,6 +364,7 @@ describe("bullmq", () => {
         (span) => span.name === "queueName.jobName Job.addJob",
       );
       assert.notStrictEqual(jobAddSpan, undefined);
+      assert.strictEqual(jobAddSpan?.kind, SpanKind.PRODUCER);
       assertContains(jobAddSpan?.attributes!, {
         "messaging.destination": "queueName",
         "messaging.bullmq.job.name": "jobName",
@@ -348,6 +385,7 @@ describe("bullmq", () => {
         (span) => span.name === "childQueueName.childJobName Job.addJob",
       );
       assert.notStrictEqual(childJobAddSpan, undefined);
+      assert.strictEqual(childJobAddSpan?.kind, SpanKind.PRODUCER);
       assertContains(childJobAddSpan?.attributes!, {
         "messaging.destination": "childQueueName",
         "messaging.bullmq.job.name": "childJobName",
@@ -375,6 +413,32 @@ describe("bullmq", () => {
       assertRootSpan(flowProducerAddSpan!);
     });
 
+    it("should not create any job spans for add with children when emitJobSpansForFlow is false", async () => {
+      instrumentation.setConfig({ emitJobSpansForFlow: false });
+
+      const q = new FlowProducer({ connection });
+      await q.add({
+        name: "jobName",
+        queueName: "queueName",
+        children: [
+          {
+            name: "childJobName",
+            queueName: "childQueueName",
+          },
+        ],
+      });
+
+      const spans = memoryExporter.getFinishedSpans();
+      assert.strictEqual(spans.length, 1);
+      spans.forEach(assertMessagingSystem);
+
+      const flowProducerAddSpan = spans.find(
+        (span) => span.name === "queueName.jobName FlowProducer.add",
+      );
+      assert.notStrictEqual(flowProducerAddSpan, undefined);
+      assert.strictEqual(flowProducerAddSpan?.kind, SpanKind.PRODUCER);
+    });
+
     it("should create a queue span and many job spans for addBulk", async () => {
       const q = new FlowProducer({ connection });
       await q.addBulk([
@@ -390,6 +454,8 @@ describe("bullmq", () => {
         (span) => span.name === "FlowProducer.addBulk",
       );
       assert.notStrictEqual(flowProducerAddBulkSpan, undefined);
+      assert.strictEqual(flowProducerAddBulkSpan?.kind, SpanKind.INTERNAL);
+
       assertContains(flowProducerAddBulkSpan?.attributes!, {
         "messaging.bullmq.job.bulk.names": ["jobName1", "jobName2"],
         "messaging.bullmq.job.bulk.count": 2,
@@ -405,13 +471,59 @@ describe("bullmq", () => {
       const jobAddSpan2 = spans.find(
         (span) => span.name === "queueName.jobName2 Job.addJob",
       );
-      assert.notStrictEqual(jobAddSpan1, undefined);
-      assert.notStrictEqual(jobAddSpan2, undefined);
 
-      assertSpanParent(jobAddSpan1!, flowProducerAddBulkSpan!);
-      assertSpanParent(jobAddSpan2!, flowProducerAddBulkSpan!);
+      for (const jobAddSpan of [jobAddSpan1, jobAddSpan2]) {
+        assert.notStrictEqual(jobAddSpan, undefined);
+        assert.strictEqual(jobAddSpan?.kind, SpanKind.PRODUCER);
+        assertSpanParent(jobAddSpan!, flowProducerAddBulkSpan!);
+      }
+
       assertRootSpan(flowProducerAddBulkSpan!);
     });
+
+    for (const [condition, config] of [
+      [
+        "emitJobSpansForBulk is false",
+        {
+          emitJobSpansForBulk: false,
+          emitJobSpansForFlow: true,
+        },
+      ],
+      [
+        "emitJobSpansForFlow is false",
+        {
+          emitJobSpansForBulk: true,
+          emitJobSpansForFlow: false,
+        },
+      ],
+      [
+        "both emitJobSpansForBulk and emitJobSpansForFlow are false",
+        {
+          emitJobSpansForBulk: false,
+          emitJobSpansForFlow: false,
+        },
+      ],
+    ] as [string, BullMQInstrumentationConfig][]) {
+      it(`should not create any job spans for addBulk when ${condition}`, async () => {
+        instrumentation.setConfig(config);
+
+        const q = new FlowProducer({ connection });
+        await q.addBulk([
+          { name: "jobName1", queueName: "queueName" },
+          { name: "jobName2", queueName: "queueName" },
+        ]);
+
+        const spans = memoryExporter.getFinishedSpans();
+        assert.strictEqual(spans.length, 1);
+        spans.forEach(assertMessagingSystem);
+
+        const flowProducerAddBulkSpan = spans.find(
+          (span) => span.name === "FlowProducer.addBulk",
+        );
+        assert.notStrictEqual(flowProducerAddBulkSpan, undefined);
+        assert.strictEqual(flowProducerAddBulkSpan?.kind, SpanKind.PRODUCER);
+      });
+    }
   });
 
   describe("Worker", () => {

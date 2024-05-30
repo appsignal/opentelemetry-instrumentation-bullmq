@@ -1,1 +1,4 @@
-export { Instrumentation as BullMQInstrumentation } from "./instrumentation";
+export {
+  BullMQInstrumentation,
+  BullMQInstrumentationConfig,
+} from "./instrumentation";

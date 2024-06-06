@@ -257,7 +257,7 @@ describe("bullmq", () => {
 
       // TODO: why is there no message ID?
       assertDoesNotContain(queueAddSpan?.attributes!, [
-        "message.id",
+        "messaging.message_id",
         "messaging.bullmq.job.parentOpts.parentKey",
         "messaging.bullmq.job.parentOpts.flowChildrenKey",
       ]);
@@ -276,7 +276,7 @@ describe("bullmq", () => {
       assert.notStrictEqual(queueAddSpan, undefined);
       assertContains(queueAddSpan?.attributes!, {
         "messaging.bullmq.job.name": "jobName",
-        "message.id": "foobar",
+        "messaging.message_id": "foobar",
       });
     });
 
@@ -469,9 +469,9 @@ describe("bullmq", () => {
         "messaging.destination": "queueName",
         "messaging.bullmq.job.name": "jobName",
       });
-      // TODO: rename to `messaging.message.id`
+
       assert.strictEqual(
-        typeof jobAddSpan?.attributes!["message.id"],
+        typeof jobAddSpan?.attributes!["messaging.message_id"],
         "string",
       );
       assertDoesNotContain(jobAddSpan?.attributes!, [
@@ -526,14 +526,14 @@ describe("bullmq", () => {
           "bull:queueName:waiting-children",
       });
       assert.strictEqual(
-        typeof jobAddSpan?.attributes!["message.id"],
+        typeof jobAddSpan?.attributes!["messaging.message_id"],
         "string",
       );
       assertDoesNotContain(jobAddSpan?.attributes!, [
         "messaging.bullmq.job.parentOpts.parentKey",
       ]);
 
-      const jobId = jobAddSpan?.attributes!["message.id"] as string;
+      const jobId = jobAddSpan?.attributes!["messaging.message_id"] as string;
 
       const childJobAddSpan = spans.find(
         (span) => span.name === "childQueueName.childJobName Job.addJob",
@@ -550,14 +550,14 @@ describe("bullmq", () => {
         "messaging.bullmq.job.parentOpts.parentKey": `bull:queueName:${jobId}`,
       });
       assert.strictEqual(
-        typeof childJobAddSpan?.attributes!["message.id"],
+        typeof childJobAddSpan?.attributes!["messaging.message_id"],
         "string",
       );
       assert.notStrictEqual(
-        childJobAddSpan?.attributes!["message.id"],
+        childJobAddSpan?.attributes!["messaging.message_id"],
         "unknown",
       );
-      assert.notStrictEqual(childJobAddSpan?.attributes!["message.id"], jobId);
+      assert.notStrictEqual(childJobAddSpan?.attributes!["messaging.message_id"], jobId);
       assertDoesNotContain(childJobAddSpan?.attributes!, [
         "messaging.bullmq.job.parentOpts.waitChildrenKey",
       ]);

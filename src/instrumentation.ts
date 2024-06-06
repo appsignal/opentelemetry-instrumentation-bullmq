@@ -227,7 +227,7 @@ export class BullMQInstrumentation extends InstrumentationBase {
             if (shouldSetAttributes) {
               span.setAttributes(
                 BullMQInstrumentation.dropInvalidAttributes({
-                  [SemanticAttributes.MESSAGE_ID]: this.id,
+                  [SemanticAttributes.MESSAGING_MESSAGE_ID]: this.id,
                   [BullMQAttributes.JOB_TIMESTAMP]: this.timestamp,
                 }),
               );

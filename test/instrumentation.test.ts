@@ -30,6 +30,8 @@ import {
   defaultConfig,
 } from "../src/instrumentation";
 
+import util from "util";
+
 // rewiremock.disable();
 
 let Queue: typeof bullmq.Queue;
@@ -49,7 +51,6 @@ function getWait(): [Promise<any>, Function, Function] {
 }
 
 // function printSpans(spans: ReadableSpan[]) {
-//   const util = require("util");
 //   console.log(
 //     util.inspect(
 //       spans.map((span) => ({
@@ -101,15 +102,30 @@ function assertContains(
   object: Record<any, unknown>,
   pairs: Record<any, unknown>,
 ) {
-  Object.entries(pairs).forEach(([key, value]) => {
-    assert.deepStrictEqual(object[key], value);
-  });
+  contextualizeError(() => {
+    Object.entries(pairs).forEach(([key, value]) => {
+      assert.deepStrictEqual(object[key], value);
+    });
+  }, { input: object, expected: pairs })
 }
 
 function assertDoesNotContain(object: Record<any, unknown>, keys: string[]) {
   keys.forEach((key) => {
-    assert.strictEqual(object[key], undefined);
+    contextualizeError(() => {
+      assert.strictEqual(object[key], undefined);
+    }, { key })
   });
+}
+
+function contextualizeError(fn: () => void, context: Record<string, any>) {
+  try {
+    fn();
+  } catch (e: any) {
+    Object.entries(context).forEach(([key, value]) => {
+      e.message += `\n${key}: ${util.format(value)}`
+    });
+    throw e;
+  }
 }
 
 describe("bullmq", () => {

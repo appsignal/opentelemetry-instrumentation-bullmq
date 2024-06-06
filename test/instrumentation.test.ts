@@ -140,7 +140,6 @@ describe("bullmq", () => {
   beforeEach(() => {
     contextManager.enable();
     context.setGlobalContextManager(contextManager);
-    trace.setGlobalTracerProvider(provider);
     instrumentation.setTracerProvider(provider);
     trace.setGlobalTracerProvider(provider);
     instrumentation.setConfig(defaultConfig);

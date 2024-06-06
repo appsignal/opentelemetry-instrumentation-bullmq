@@ -102,18 +102,43 @@ function assertContains(
   object: Record<any, unknown>,
   pairs: Record<any, unknown>,
 ) {
-  contextualizeError(() => {
-    Object.entries(pairs).forEach(([key, value]) => {
-      assert.deepStrictEqual(object[key], value);
-    });
-  }, { input: object, expected: pairs })
+  contextualizeError(
+    () => {
+      Object.entries(pairs).forEach(([key, value]) => {
+        assert.deepStrictEqual(object[key], value);
+      });
+    },
+    { actual: object, expected: pairs },
+  );
+}
+
+// Performs a set equality comparison
+function assertEqualSet<T>(actual: Iterable<T>, expected: Iterable<T>) {
+  const actualSet = new Set(actual);
+  const expectedSet = new Set(expected);
+
+  contextualizeError(
+    () => {
+      assert.strictEqual(actualSet.size, expectedSet.size);
+      for (const value of actual) {
+        assert.ok(expectedSet.has(value));
+      }
+    },
+    {
+      actual: actualSet.values,
+      expected: expectedSet.values,
+    },
+  );
 }
 
 function assertDoesNotContain(object: Record<any, unknown>, keys: string[]) {
   keys.forEach((key) => {
-    contextualizeError(() => {
-      assert.strictEqual(object[key], undefined);
-    }, { key })
+    contextualizeError(
+      () => {
+        assert.strictEqual(object[key], undefined);
+      },
+      { key },
+    );
   });
 }
 
@@ -122,7 +147,7 @@ function contextualizeError(fn: () => void, context: Record<string, any>) {
     fn();
   } catch (e: any) {
     Object.entries(context).forEach(([key, value]) => {
-      e.message += `\n${key}: ${util.format(value)}`
+      e.message += `\n${key}: ${util.format(value)}`;
     });
     throw e;
   }
@@ -246,12 +271,14 @@ describe("bullmq", () => {
       spans.forEach(assertMessagingSystem);
 
       const queueAddSpan = spans.find(
-        (span) => span.name === "queueName.jobName Queue.add",
+        (span) => span.name === "queueName publish",
       );
       assert.notStrictEqual(queueAddSpan, undefined);
       assert.strictEqual(queueAddSpan?.kind, SpanKind.PRODUCER);
       assertContains(queueAddSpan?.attributes!, {
         "messaging.destination": "queueName",
+        "messaging.bullmq.operation.name": "Queue.add",
+        "messaging.operation": "publish",
         "messaging.bullmq.job.name": "jobName",
       });
 
@@ -271,7 +298,7 @@ describe("bullmq", () => {
 
       const spans = memoryExporter.getFinishedSpans();
       const queueAddSpan = spans.find(
-        (span) => span.name === "queueName.jobName Queue.add",
+        (span) => span.name === "queueName publish",
       );
       assert.notStrictEqual(queueAddSpan, undefined);
       assertContains(queueAddSpan?.attributes!, {
@@ -286,7 +313,7 @@ describe("bullmq", () => {
 
       const spans = memoryExporter.getFinishedSpans();
       const queueAddSpan = spans.find(
-        (span) => span.name === "queueName.jobName Queue.add",
+        (span) => span.name === "queueName publish",
       );
       assert.notStrictEqual(queueAddSpan, undefined);
       assertContains(queueAddSpan?.attributes!, {
@@ -306,11 +333,13 @@ describe("bullmq", () => {
       spans.forEach(assertMessagingSystem);
 
       const queueAddBulkSpan = spans.find(
-        (span) => span.name === "queueName Queue.addBulk",
+        (span) => span.name === "queueName publish",
       );
       assert.notStrictEqual(queueAddBulkSpan, undefined);
       assertContains(queueAddBulkSpan?.attributes!, {
         "messaging.destination": "queueName",
+        "messaging.bullmq.operation.name": "Queue.addBulk",
+        "messaging.operation": "publish",
         "messaging.bullmq.job.bulk.names": ["jobName1", "jobName2"],
         "messaging.bullmq.job.bulk.count": 2,
       });
@@ -318,17 +347,30 @@ describe("bullmq", () => {
         "messaging.bullmq.job.name",
       ]);
 
-      const jobAddSpan1 = spans.find(
-        (span) => span.name === "queueName.jobName1 Job.addJob",
+      const jobAddSpans = spans.filter(
+        (span) => span.name === "queueName create",
       );
-      const jobAddSpan2 = spans.find(
-        (span) => span.name === "queueName.jobName2 Job.addJob",
-      );
-      assert.notStrictEqual(jobAddSpan1, undefined);
-      assert.notStrictEqual(jobAddSpan2, undefined);
 
-      assertSpanParent(jobAddSpan1!, queueAddBulkSpan!);
-      assertSpanParent(jobAddSpan2!, queueAddBulkSpan!);
+      assert.strictEqual(jobAddSpans.length, 2);
+
+      jobAddSpans.forEach((jobAddSpan) => {
+        assert.notStrictEqual(jobAddSpan, undefined);
+
+        assertContains(jobAddSpan?.attributes!, {
+          "messaging.bullmq.operation.name": "Job.addJob",
+          "messaging.operation": "create",
+        });
+
+        assertSpanParent(jobAddSpan!, queueAddBulkSpan!);
+      });
+
+      assertEqualSet(
+        jobAddSpans.map(
+          (jobAddSpan) => jobAddSpan.attributes!["messaging.bullmq.job.name"],
+        ),
+        ["jobName1", "jobName2"],
+      );
+
       assertRootSpan(queueAddBulkSpan!);
     });
   });
@@ -347,7 +389,7 @@ describe("bullmq", () => {
     spans.forEach(assertMessagingSystem);
 
     const queueAddBulkSpan = spans.find(
-      (span) => span.name === "queueName Queue.addBulk",
+      (span) => span.name === "queueName publish",
     );
     assert.notStrictEqual(queueAddBulkSpan, undefined);
   });
@@ -453,20 +495,22 @@ describe("bullmq", () => {
       spans.forEach(assertMessagingSystem);
 
       const flowProducerAddSpan = spans.find(
-        (span) => span.name === "queueName.jobName FlowProducer.add",
+        (span) => span.name === "queueName publish",
       );
       assert.notStrictEqual(flowProducerAddSpan, undefined);
       assertContains(flowProducerAddSpan?.attributes!, {
         "messaging.destination": "queueName",
+        "messaging.bullmq.operation.name": "FlowProducer.add",
+        "messaging.operation": "publish",
         "messaging.bullmq.job.name": "jobName",
       });
 
-      const jobAddSpan = spans.find(
-        (span) => span.name === "queueName.jobName Job.addJob",
-      );
+      const jobAddSpan = spans.find((span) => span.name === "queueName create");
       assert.notStrictEqual(jobAddSpan, undefined);
       assertContains(jobAddSpan?.attributes!, {
         "messaging.destination": "queueName",
+        "messaging.bullmq.operation.name": "Job.addJob",
+        "messaging.operation": "create",
         "messaging.bullmq.job.name": "jobName",
       });
 
@@ -505,22 +549,24 @@ describe("bullmq", () => {
       spans.forEach(assertMessagingSystem);
 
       const flowProducerAddSpan = spans.find(
-        (span) => span.name === "queueName.jobName FlowProducer.add",
+        (span) => span.name === "queueName publish",
       );
       assert.notStrictEqual(flowProducerAddSpan, undefined);
       assert.strictEqual(flowProducerAddSpan?.kind, SpanKind.INTERNAL);
       assertContains(flowProducerAddSpan?.attributes!, {
         "messaging.destination": "queueName",
+        "messaging.bullmq.operation.name": "FlowProducer.add",
+        "messaging.operation": "publish",
         "messaging.bullmq.job.name": "jobName",
       });
 
-      const jobAddSpan = spans.find(
-        (span) => span.name === "queueName.jobName Job.addJob",
-      );
+      const jobAddSpan = spans.find((span) => span.name === "queueName create");
       assert.notStrictEqual(jobAddSpan, undefined);
       assert.strictEqual(jobAddSpan?.kind, SpanKind.PRODUCER);
       assertContains(jobAddSpan?.attributes!, {
         "messaging.destination": "queueName",
+        "messaging.bullmq.operation.name": "Job.addJob",
+        "messaging.operation": "create",
         "messaging.bullmq.job.name": "jobName",
         "messaging.bullmq.job.parentOpts.waitChildrenKey":
           "bull:queueName:waiting-children",
@@ -536,12 +582,14 @@ describe("bullmq", () => {
       const jobId = jobAddSpan?.attributes!["messaging.message_id"] as string;
 
       const childJobAddSpan = spans.find(
-        (span) => span.name === "childQueueName.childJobName Job.addJob",
+        (span) => span.name === "childQueueName create",
       );
       assert.notStrictEqual(childJobAddSpan, undefined);
       assert.strictEqual(childJobAddSpan?.kind, SpanKind.PRODUCER);
       assertContains(childJobAddSpan?.attributes!, {
         "messaging.destination": "childQueueName",
+        "messaging.bullmq.operation.name": "Job.addJob",
+        "messaging.operation": "create",
         "messaging.bullmq.job.name": "childJobName",
         "messaging.bullmq.job.opts.parent.id": `${jobId}`,
         // TODO: should this just be `queueName`, without `bull:`?
@@ -557,7 +605,10 @@ describe("bullmq", () => {
         childJobAddSpan?.attributes!["messaging.message_id"],
         "unknown",
       );
-      assert.notStrictEqual(childJobAddSpan?.attributes!["messaging.message_id"], jobId);
+      assert.notStrictEqual(
+        childJobAddSpan?.attributes!["messaging.message_id"],
+        jobId,
+      );
       assertDoesNotContain(childJobAddSpan?.attributes!, [
         "messaging.bullmq.job.parentOpts.waitChildrenKey",
       ]);
@@ -587,7 +638,7 @@ describe("bullmq", () => {
       spans.forEach(assertMessagingSystem);
 
       const flowProducerAddSpan = spans.find(
-        (span) => span.name === "queueName.jobName FlowProducer.add",
+        (span) => span.name === "queueName publish",
       );
       assert.notStrictEqual(flowProducerAddSpan, undefined);
       assert.strictEqual(flowProducerAddSpan?.kind, SpanKind.PRODUCER);
@@ -605,13 +656,15 @@ describe("bullmq", () => {
       spans.forEach(assertMessagingSystem);
 
       const flowProducerAddBulkSpan = spans.find(
-        (span) => span.name === "FlowProducer.addBulk",
+        (span) => span.name === "(bulk) publish",
       );
       assert.notStrictEqual(flowProducerAddBulkSpan, undefined);
       assert.strictEqual(flowProducerAddBulkSpan?.kind, SpanKind.INTERNAL);
 
       assertContains(flowProducerAddBulkSpan?.attributes!, {
         "messaging.bullmq.job.bulk.names": ["jobName1", "jobName2"],
+        "messaging.bullmq.operation.name": "FlowProducer.addBulk",
+        "messaging.operation": "publish",
         "messaging.bullmq.job.bulk.count": 2,
       });
       assertDoesNotContain(flowProducerAddBulkSpan?.attributes!, [
@@ -619,18 +672,26 @@ describe("bullmq", () => {
         "messaging.bullmq.job.name",
       ]);
 
-      const jobAddSpan1 = spans.find(
-        (span) => span.name === "queueName.jobName1 Job.addJob",
-      );
-      const jobAddSpan2 = spans.find(
-        (span) => span.name === "queueName.jobName2 Job.addJob",
+      const jobAddSpans = spans.filter(
+        (span) => span.name === "queueName create",
       );
 
-      for (const jobAddSpan of [jobAddSpan1, jobAddSpan2]) {
+      for (const jobAddSpan of jobAddSpans) {
         assert.notStrictEqual(jobAddSpan, undefined);
         assert.strictEqual(jobAddSpan?.kind, SpanKind.PRODUCER);
+        assertContains(jobAddSpan?.attributes!, {
+          "messaging.bullmq.operation.name": "Job.addJob",
+          "messaging.operation": "create",
+        });
         assertSpanParent(jobAddSpan!, flowProducerAddBulkSpan!);
       }
+
+      assertEqualSet(
+        jobAddSpans.map(
+          (jobAddSpan) => jobAddSpan.attributes!["messaging.bullmq.job.name"],
+        ),
+        ["jobName1", "jobName2"],
+      );
 
       assertRootSpan(flowProducerAddBulkSpan!);
     });
@@ -672,7 +733,7 @@ describe("bullmq", () => {
         spans.forEach(assertMessagingSystem);
 
         const flowProducerAddBulkSpan = spans.find(
-          (span) => span.name === "FlowProducer.addBulk",
+          (span) => span.name === "(bulk) publish",
         );
         assert.notStrictEqual(flowProducerAddBulkSpan, undefined);
         assert.strictEqual(flowProducerAddBulkSpan?.kind, SpanKind.PRODUCER);
@@ -729,12 +790,12 @@ describe("bullmq", () => {
       spans.forEach(assertMessagingSystem);
 
       const queueAddSpan = spans.find(
-        (span) => span.name === "queueName.testJob Queue.add",
+        (span) => span.name === "queueName publish",
       );
       assert.notStrictEqual(queueAddSpan, undefined);
 
       const workerJobSpan = spans.find((span) =>
-        span.name.includes("queueName.testJob Worker.queueName"),
+        span.name.includes("queueName process"),
       );
       assert.notStrictEqual(workerJobSpan, undefined);
       assert.strictEqual(workerJobSpan?.kind, SpanKind.CONSUMER);
@@ -742,11 +803,11 @@ describe("bullmq", () => {
       assertSpanLink(workerJobSpan!, queueAddSpan!);
       assertContains(workerJobSpan?.attributes!, {
         "messaging.consumer_id": "queueName",
+        "messaging.destination": "queueName",
         "messaging.message_id": "1",
-        "messaging.operation": "receive",
+        "messaging.operation": "process",
+        "messaging.bullmq.operation.name": "Worker.run",
         "messaging.bullmq.job.name": "testJob",
-        "messaging.bullmq.queue.name": "queueName",
-        "messaging.bullmq.worker.name": "queueName",
         "messaging.bullmq.worker.concurrency": 1,
         "messaging.bullmq.worker.lockDuration": 30000,
         "messaging.bullmq.worker.lockRenewTime": 15000,
@@ -799,7 +860,7 @@ describe("bullmq", () => {
 
       const spans = memoryExporter.getFinishedSpans();
       const workerJobSpan = spans.find((span) =>
-        span.name.includes("queueName.testJob Worker.queueName"),
+        span.name.includes("queueName process"),
       );
       assert.notStrictEqual(workerJobSpan, undefined);
 
@@ -831,7 +892,7 @@ describe("bullmq", () => {
 
       const span = memoryExporter
         .getFinishedSpans()
-        .find((span) => span.name.includes("Worker.worker"));
+        .find((span) => span.name.includes("worker process"));
       const evt = span?.events.find((event) =>
         event.name.includes("extendLock"),
       );
@@ -860,7 +921,7 @@ describe("bullmq", () => {
 
       const span = memoryExporter
         .getFinishedSpans()
-        .find((span) => span.name.includes("Worker.worker"));
+        .find((span) => span.name.includes("worker process"));
       const evt = span?.events.find((event) =>
         event.name.includes("exception"),
       );
@@ -903,7 +964,7 @@ describe("bullmq", () => {
       spans.forEach(assertMessagingSystem);
 
       const jobSpans = spans.filter((span) =>
-        span.name.includes("Worker.worker"),
+        span.name.includes("worker process"),
       );
       assert.strictEqual(jobSpans.length, 2);
       jobSpans.forEach((span) => {

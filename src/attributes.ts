@@ -5,6 +5,7 @@ const worker = `${ns}.worker`;
 
 export const BullMQAttributes = {
   MESSAGING_SYSTEM: "bullmq",
+  MESSAGING_OPERATION_NAME: `${ns}.operation.name`,
   JOB_ATTEMPTS: `${job}.attempts`,
   JOB_DELAY: `${job}.delay`,
   JOB_FAILED_REASON: `${job}.failedReason`,
@@ -18,8 +19,6 @@ export const BullMQAttributes = {
   JOB_WAIT_CHILDREN_KEY: `${job}.parentOpts.waitChildrenKey`,
   JOB_BULK_NAMES: `${job}.bulk.names`,
   JOB_BULK_COUNT: `${job}.bulk.count`,
-  QUEUE_NAME: `${queue}.name`,
-  WORKER_NAME: `${worker}.name`,
   WORKER_CONCURRENCY: `${worker}.concurrency`,
   WORKER_LOCK_DURATION: `${worker}.lockDuration`,
   WORKER_LOCK_RENEW: `${worker}.lockRenewTime`,

@@ -3,7 +3,6 @@ import {
   InstrumentationConfig,
   InstrumentationNodeModuleDefinition,
 } from "@opentelemetry/instrumentation";
-import { SemanticAttributes } from "@opentelemetry/semantic-conventions";
 import type { Attributes, Link, Span } from "@opentelemetry/api";
 import {
   context,
@@ -27,7 +26,7 @@ import type {
 import { flatten } from "flat";
 
 import { VERSION } from "./version";
-import { BullMQAttributes } from "./attributes";
+import { SemanticAttributes, BullMQAttributes } from "./attributes";
 
 declare type Fn = (...args: any[]) => any;
 const BULK_CONTEXT = Symbol("BULLMQ_BULK_CONTEXT");

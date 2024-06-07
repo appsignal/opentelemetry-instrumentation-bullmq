@@ -199,9 +199,9 @@ describe("bullmq", () => {
       assert.strictEqual(spans.length, 0);
     });
 
-    describe("when requireParentSpanForProducer is true", async () => {
+    describe("when requireParentSpanForPublish is true", async () => {
       beforeEach(() => {
-        instrumentation.setConfig({ requireParentSpanForProducer: true });
+        instrumentation.setConfig({ requireParentSpanForPublish: true });
       });
 
       it("should not create a queue span for add when there is no parent span", async () => {
@@ -259,8 +259,8 @@ describe("bullmq", () => {
       // These configuration options should not affect its behaviour, as this
       // is neither a bulk operation nor a flow operation.
       instrumentation.setConfig({
-        emitJobSpansForBulk: false,
-        emitJobSpansForFlow: false,
+        emitCreateSpansForBulk: false,
+        emitCreateSpansForFlow: false,
       });
 
       const q = new Queue("queueName", { connection });
@@ -375,8 +375,8 @@ describe("bullmq", () => {
     });
   });
 
-  it("should not create any job spans for addBulk when emitJobSpansForBulk is false", async () => {
-    instrumentation.setConfig({ emitJobSpansForBulk: false });
+  it("should not create any job spans for addBulk when emitCreateSpansForBulk is false", async () => {
+    instrumentation.setConfig({ emitCreateSpansForBulk: false });
 
     const q = new Queue("queueName", { connection });
     await q.addBulk([
@@ -404,9 +404,9 @@ describe("bullmq", () => {
       assert.strictEqual(spans.length, 0);
     });
 
-    describe("when requireParentSpanForProducer is true", async () => {
+    describe("when requireParentSpanForPublish is true", async () => {
       beforeEach(() => {
-        instrumentation.setConfig({ requireParentSpanForProducer: true });
+        instrumentation.setConfig({ requireParentSpanForPublish: true });
       });
 
       it("should not create a queue span for add and job spans when there is no parent span", async () => {
@@ -530,7 +530,7 @@ describe("bullmq", () => {
     it("should create a queue span and many job spans for add with children", async () => {
       // This configuration option should not affect its behaviour, as this is
       // not a bulk operation, but a flow operation.
-      instrumentation.setConfig({ emitJobSpansForBulk: false });
+      instrumentation.setConfig({ emitCreateSpansForBulk: false });
 
       const q = new FlowProducer({ connection });
       await q.add({
@@ -618,8 +618,8 @@ describe("bullmq", () => {
       assertRootSpan(flowProducerAddSpan!);
     });
 
-    it("should not create any job spans for add with children when emitJobSpansForFlow is false", async () => {
-      instrumentation.setConfig({ emitJobSpansForFlow: false });
+    it("should not create any job spans for add with children when emitCreateSpansForFlow is false", async () => {
+      instrumentation.setConfig({ emitCreateSpansForFlow: false });
 
       const q = new FlowProducer({ connection });
       await q.add({
@@ -698,24 +698,24 @@ describe("bullmq", () => {
 
     for (const [condition, config] of [
       [
-        "emitJobSpansForBulk is false",
+        "emitCreateSpansForBulk is false",
         {
-          emitJobSpansForBulk: false,
-          emitJobSpansForFlow: true,
+          emitCreateSpansForBulk: false,
+          emitCreateSpansForFlow: true,
         },
       ],
       [
-        "emitJobSpansForFlow is false",
+        "emitCreateSpansForFlow is false",
         {
-          emitJobSpansForBulk: true,
-          emitJobSpansForFlow: false,
+          emitCreateSpansForBulk: true,
+          emitCreateSpansForFlow: false,
         },
       ],
       [
-        "both emitJobSpansForBulk and emitJobSpansForFlow are false",
+        "both emitCreateSpansForBulk and emitCreateSpansForFlow are false",
         {
-          emitJobSpansForBulk: false,
-          emitJobSpansForFlow: false,
+          emitCreateSpansForBulk: false,
+          emitCreateSpansForFlow: false,
         },
       ],
     ] as [string, BullMQInstrumentationConfig][]) {

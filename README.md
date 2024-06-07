@@ -21,7 +21,7 @@ It's likely that the instrumentation would support earlier versions of BullMQ, b
 
 ## Usage
 
-OpenTelemetry Bullmq Instrumentation allows the user to automatically collect trace data from Bullmq jobs and workers and export them to the backend of choice.
+OpenTelemetry BullMQ Instrumentation allows the user to automatically collect trace data from BullMQ jobs and workers and export them to the backend of choice.
 
 To load the instrumentation, specify it in the instrumentations list to `registerInstrumentations`. There is currently no configuration option.
 
@@ -36,21 +36,40 @@ const provider = new NodeTracerProvider();
 provider.register();
 
 registerInstrumentations({
-  instrumentations: [new BullMQInstrumentation()],
+  instrumentations: [
+    new BullMQInstrumentation({
+      // configuration options, see below
+    }),
+  ],
 });
 ```
 
-## Emitted Spans
+## Configuration options
 
-| Name                                                 | BullMQ method           | Description                                         |
-| ---------------------------------------------------- | ----------------------- | --------------------------------------------------- |
-| `{QueueName.JobName} Queue.add`                      | `Queue.add            ` | A new job is added to the queue                     |
-| `{QueueName} Queue.addBulk`                          | `Queue.addBulk        ` | New jobs are added to the queue in bulk             |
-| `{QueueName.FlowName} FlowProducer.add`              | `FlowProducer.add     ` | A new job flow is added to a queue                  |
-| `FlowProducer.addBulk  `                             | `FlowProducer.addBulk ` | New job flows are added to queues in bulk           |
-| `{QueueName.JobName} Job.addJob`                     | `Job.addJob           ` | Each individual job added to a queue                |
-| `{WorkerName} Worker.run`                            | `Worker.run           ` | While a worker is accepting jobs                    |
-| `{QueueName.JobName} Worker.{WorkerName} #{attempt}` | `Worker.callProcessJob` | Each job execution by a worker's processor function |
+| Name                          | Type      | Default&nbsp;value | Description                                                                                                                                                                                                  |
+| ----------------------------- | --------- | ------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `emitCreateSpansForBulk`      | `boolean` | `true`             | Whether to emit a create span for each individual job enqueued by `Queue.addBulk` or `FlowProducer.addBulk`. The span representing the overall bulk operation is emitted regardless.                         |
+| `emitCreateSpansForFlow`      | `boolean` | `true`             | Whether to emit a create span for each individual job enqueued by `FlowProducer.add` or `FlowProducer.addBulk`. The span representing the overall flow operation is emitted regardless.                      |
+| `requireParentSpanForPublish` | `boolean` | `false`            | Whether to omit emitting a publish span (and the create child spans for it, for bulk and flow operations) when there is no parent span, meaning that the span created would be the root span of a new trace. |
+
+## Emitted spans
+
+The instrumentation aims to comply with the [OpenTelemetry Semantic Convention for Messaging Spans](https://opentelemetry.io/docs/specs/semconv/messaging/messaging-spans/). Whenever possible, attributes from the semantic convention are used in these spans.
+
+| Name                  | Span kind                                                                                                                      | `messaging.bullmq.operation.name` attribute&nbsp;<a href="#emitted-spans-note-1"><sup>\[1\]</sup></a> | Description                                                                                                                                                                    |
+| --------------------- | ------------------------------------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `{queueName} publish` | `PRODUCER`                                                                                                                     | `Queue.add`                                                                                           | A new job is added to the queue.                                                                                                                                               |
+| `{queueName} publish` | `INTERNAL`&nbsp;<a href="#emitted-spans-note-2"><sup>\[2\]</sup></a>                                                           | `Queue.addBulk`                                                                                       | New jobs are added to the queue in bulk.                                                                                                                                       |
+| `{queueName} publish` | `INTERNAL`&nbsp;<a href="#emitted-spans-note-3"><sup>\[3\]</sup></a>                                                           | `FlowProducer.add`                                                                                    | A new job flow is added to a queue.                                                                                                                                            |
+| `(bulk) publish`      | `INTERNAL`&nbsp;<a href="#emitted-spans-note-2"><sup>\[2\]</sup></a>&nbsp;<a href="#emitted-spans-note-3"><sup>\[3\]</sup></a> | `FlowProducer.addBulk`                                                                                | New job flows are added to queues in bulk.                                                                                                                                     |
+| `{queueName} create`  | `PRODUCER`                                                                                                                     | `Job.add`                                                                                             | Each of the individual jobs added to a queue. Only emitted in bulk or flow operations. Child span of a publish span.&nbsp;<a href="#emitted-spans-note-4"><sup>\[4\]</sup></a> |
+| `{queueName} process` | `CONSUMER`                                                                                                                     | `Worker.run`                                                                                          | Each job execution by a worker. Linked to the corresponding producer span.&nbsp;<a href="#emitted-spans-note-5"><sup>\[5\]</sup></a>                                           |
+
+- <a name="emitted-spans-note-1">**\[1\]**</a>: Represents the BullMQ function that was called in the application in order to trigger this span to be emitted.
+- <a name="emitted-spans-note-2">**\[2\]**</a>: When the `emitCreateSpansForBulk` configuration option is set to `false`, it is a `PRODUCER` span.
+- <a name="emitted-spans-note-3">**\[3\]**</a>: When the `emitCreateSpansForFlow` configuration option is set to `false`, it is a `PRODUCER` span.
+- <a name="emitted-spans-note-4">**\[4\]**</a>: Will not be emitted for calls to `Queue.addBulk` and `FlowProducer.addBulk` when the `emitCreateSpansForBulk` configuration option is `false`, or for calls to `FlowProducer.add` and `FlowProducer.addBulk` when the `emitCreateSpansForFlow` configuration option is set to `false`.
+- <a name="emitted-spans-note-5">**\[5\]**</a>: The producer span may not have been emitted if the `requireParentSpanForPublish` is set to `true`. In this case, no link is established.
 
 ## Useful links
 

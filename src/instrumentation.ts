@@ -38,24 +38,24 @@ export interface BullMQInstrumentationConfig extends InstrumentationConfig {
    * or `FlowProducer.addBulk`. Defaults to true. Setting it to false disables
    * individual job spans for bulk operations.
    */
-  emitJobSpansForBulk?: boolean;
+  emitCreateSpansForBulk?: boolean;
 
   /**
    * Emit spans for each individual job enqueueing in calls to `FlowProducer.add`
    * or `FlowProducer.addBulk`. Defaults to true. Setting it to false disables
    * individual job spans for bulk operations.
    */
-  emitJobSpansForFlow?: boolean;
+  emitCreateSpansForFlow?: boolean;
 
   /** Require a parent span in order to create a producer span
    * (a span for the enqueueing of one or more jobs) -- defaults to `false` */
-  requireParentSpanForProducer?: boolean;
+  requireParentSpanForPublish?: boolean;
 }
 
 export const defaultConfig: Required<BullMQInstrumentationConfig> = {
-  emitJobSpansForBulk: true,
-  emitJobSpansForFlow: true,
-  requireParentSpanForProducer: false,
+  emitCreateSpansForBulk: true,
+  emitCreateSpansForFlow: true,
+  requireParentSpanForPublish: false,
   // unused by `configFor` but required for the type
   enabled: true,
 };
@@ -163,7 +163,7 @@ export class BullMQInstrumentation extends InstrumentationBase {
         let parentSpan = trace.getSpan(parentContext);
 
         if (parentSpan === undefined) {
-          // This can happen when `requireParentSpanForProducer` is true.
+          // This can happen when `requireParentSpanForPublish` is true.
           return await original.apply(this, [client, parentOpts]);
         }
 
@@ -254,7 +254,7 @@ export class BullMQInstrumentation extends InstrumentationBase {
     return function add(original) {
       return async function patch(this: Queue, ...args: any): Promise<Job> {
         if (
-          instrumentation.configFor("requireParentSpanForProducer") &&
+          instrumentation.configFor("requireParentSpanForPublish") &&
           trace.getSpan(context.active()) === undefined
         ) {
           return await original.apply(this, args);
@@ -288,7 +288,7 @@ export class BullMQInstrumentation extends InstrumentationBase {
         ...args: [bullmq.Job[], ...any]
       ): Promise<bullmq.Job[]> {
         if (
-          instrumentation.configFor("requireParentSpanForProducer") &&
+          instrumentation.configFor("requireParentSpanForPublish") &&
           trace.getSpan(context.active()) === undefined
         ) {
           return await original.apply(this, args);
@@ -339,7 +339,7 @@ export class BullMQInstrumentation extends InstrumentationBase {
         opts?: FlowOpts,
       ): Promise<JobNode> {
         if (
-          instrumentation.configFor("requireParentSpanForProducer") &&
+          instrumentation.configFor("requireParentSpanForPublish") &&
           trace.getSpan(context.active()) === undefined
         ) {
           return await original.apply(this, [flow, opts]);
@@ -392,7 +392,7 @@ export class BullMQInstrumentation extends InstrumentationBase {
         ...args: [FlowJob[], ...any]
       ): Promise<JobNode> {
         if (
-          instrumentation.configFor("requireParentSpanForProducer") &&
+          instrumentation.configFor("requireParentSpanForPublish") &&
           trace.getSpan(context.active()) === undefined
         ) {
           return await original.apply(this, args);
@@ -582,13 +582,13 @@ export class BullMQInstrumentation extends InstrumentationBase {
   }): boolean {
     if (isBulk && isFlow) {
       return (
-        this.configFor("emitJobSpansForBulk") &&
-        this.configFor("emitJobSpansForFlow")
+        this.configFor("emitCreateSpansForBulk") &&
+        this.configFor("emitCreateSpansForFlow")
       );
     } else if (isBulk) {
-      return this.configFor("emitJobSpansForBulk");
+      return this.configFor("emitCreateSpansForBulk");
     } else if (isFlow) {
-      return this.configFor("emitJobSpansForFlow");
+      return this.configFor("emitCreateSpansForFlow");
     } else {
       return true;
     }

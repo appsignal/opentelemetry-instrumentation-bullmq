@@ -1,5 +1,5 @@
 {
-  "name": "@jenniferplusplus/opentelemetry-instrumentation-bullmq",
+  "name": "@appsignal/opentelemetry-instrumentation-bullmq",
   "version": "0.5.0",
   "description": "Auto-instrumentation for the BullMQ message framework",
   "main": "dist/index.js",
@@ -63,10 +63,10 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/jenniferplusplus/opentelemetry-instrumentation-bullmq.git"
+    "url": "git+https://github.com/appsignal/opentelemetry-instrumentation-bullmq.git"
   },
   "bugs": {
-    "url": "https://github.com/jenniferplusplus/opentelemetry-instrumentation-bullmq/issues"
+    "url": "https://github.com/appsignal/opentelemetry-instrumentation-bullmq/issues"
   },
-  "homepage": "https://github.com/jenniferplusplus/opentelemetry-instrumentation-bullmq#readme"
+  "homepage": "https://github.com/appsignal/opentelemetry-instrumentation-bullmq#readme"
 }

@@ -1,7 +1,7 @@
 # OpenTelemetry Bullmq Instrumentation for Node.js
 
-[![Node.js CI](https://github.com/jenniferplusplus/opentelemetry-instrumentation-bullmq/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/jenniferplusplus/opentelemetry-instrumentation-bullmq/actions/workflows/ci.yml)
-[![npm version](https://badge.fury.io/js/@jenniferplusplus%2Fopentelemetry-instrumentation-bullmq.svg)](https://badge.fury.io/js/@jenniferplusplus%2Fopentelemetry-instrumentation-bullmq)
+[![Node.js CI](https://github.com/appsignal/opentelemetry-instrumentation-bullmq/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/appsignal/opentelemetry-instrumentation-bullmq/actions/workflows/ci.yml)
+[![npm version](https://badge.fury.io/js/@appsignal%2Fopentelemetry-instrumentation-bullmq.svg)](https://badge.fury.io/js/@appsignal%2Fopentelemetry-instrumentation-bullmq)
 
 This module provides automatic tracing instrumentation for [BullMQ][bullmq-web-url].
 
@@ -10,7 +10,7 @@ Compatible with OpenTelemetry JS API and SDK `1.0+`.
 ## Installation
 
 ```bash
-npm install --save @jenniferplusplus/opentelemetry-instrumentation-bullmq
+npm install --save @appsignal/opentelemetry-instrumentation-bullmq
 ```
 
 ### Supported Versions
@@ -30,7 +30,7 @@ const { NodeTracerProvider } = require("@opentelemetry/sdk-trace-node");
 const { registerInstrumentations } = require("@opentelemetry/instrumentation");
 const {
   BullMQInstrumentation,
-} = require("@jenniferplusplus/opentelemetry-instrumentation-bullmq");
+} = require("@appsignal/opentelemetry-instrumentation-bullmq");
 
 const provider = new NodeTracerProvider();
 provider.register();
@@ -63,7 +63,7 @@ registerInstrumentations({
 Apache 2.0 - See [LICENSE][license-url] for more information.
 
 [license-url]: https://opensource.org/licenses/Apache-2.0
-[npm-url]: https://www.npmjs.com/package/@jenniferplusplus/opentelemetry-instrumentation-bullmq
+[npm-url]: https://www.npmjs.com/package/@appsignal/opentelemetry-instrumentation-bullmq
 [bullmq-web-url]: https://docs.bullmq.io/
 
 ## Contributing

@@ -18,7 +18,7 @@ jobs:
       - id: version
         uses: EndBug/version-check@v2.1.1
         with:
-          file-url: https://unpkg.com/@jenniferplusplus/opentelemetry-instrumentation-bullmq@latest/package.json
+          file-url: https://unpkg.com/@appsignal/opentelemetry-instrumentation-bullmq@latest/package.json
           static-checking: localIsNew
       - name: Use Node.js
         if: steps.version.outputs.changed == 'true'

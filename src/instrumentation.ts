@@ -64,7 +64,7 @@ export class BullMQInstrumentation extends InstrumentationBase {
   protected override _config!: BullMQInstrumentationConfig;
 
   constructor(config: BullMQInstrumentationConfig = {}) {
-    super("opentelemetry-instrumentation-bullmq", VERSION, config);
+    super("@appsignal/opentelemetry-instrumentation-bullmq", VERSION, config);
   }
 
   override setConfig(config?: BullMQInstrumentationConfig) {

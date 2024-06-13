@@ -84,7 +84,7 @@ export class BullMQInstrumentation extends InstrumentationBase {
       ["1.*", "2.*", "3.*", "4.*", "5.*"],
       this._onPatchMain(),
       this._onUnPatchMain(),
-    );
+    ) as InstrumentationNodeModuleDefinition<any>;
   }
 
   private _onPatchMain() {

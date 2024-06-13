@@ -43,6 +43,11 @@
   "peerDependencies": {
     "bullmq": "^2 || ^3 || ^4 || ^5"
   },
+  "peerDependenciesMeta": {
+    "bullmq": {
+      "optional": true
+    }
+  },
   "devDependencies": {
     "@opentelemetry/context-async-hooks": "^1.8.0",
     "@opentelemetry/sdk-trace-base": "^1.8.0",

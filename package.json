@@ -1,6 +1,6 @@
 {
   "name": "@appsignal/opentelemetry-instrumentation-bullmq",
-  "version": "0.7.1",
+  "version": "0.7.2",
   "description": "Auto-instrumentation for the BullMQ message framework",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",

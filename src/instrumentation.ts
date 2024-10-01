@@ -67,7 +67,7 @@ export class BullMQInstrumentation extends InstrumentationBase {
     super("@appsignal/opentelemetry-instrumentation-bullmq", VERSION, config);
   }
 
-  override setConfig(config?: BullMQInstrumentationConfig) {
+  override setConfig(config: BullMQInstrumentationConfig) {
     super.setConfig(config);
   }
 
@@ -79,12 +79,12 @@ export class BullMQInstrumentation extends InstrumentationBase {
    *   the plugin should patch multiple modules or versions.
    */
   protected init() {
-    return new InstrumentationNodeModuleDefinition<typeof bullmq>(
+    return new InstrumentationNodeModuleDefinition(
       "bullmq",
       ["1.*", "2.*", "3.*", "4.*", "5.*"],
       this._onPatchMain(),
       this._onUnPatchMain(),
-    ) as InstrumentationNodeModuleDefinition<any>;
+    );
   }
 
   private _onPatchMain() {

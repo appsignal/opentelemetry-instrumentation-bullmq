@@ -8,11 +8,11 @@
     "dist/"
   ],
   "scripts": {
-    "compile": "tsc -p .",
-    "compile:watch": "tsc -w",
+    "build": "tsc -p .",
+    "build:watch": "tsc -w",
     "lint": "eslint src/ test/ --ext .ts; prettier -c .",
     "lint:fix": "eslint src/ test/ --ext .ts --fix; prettier -w .",
-    "prepare": "npm run compile",
+    "prepare": "npm run build",
     "test": "mocha --require ts-node/register --exit --timeout 10000 test/**/*.test.ts",
     "test:all": "for v in 2 3 4 latest; do npm i bullmq@$v; npm list bullmq; npm run test; done;"
   },

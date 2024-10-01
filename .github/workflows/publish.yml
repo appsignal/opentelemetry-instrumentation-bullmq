@@ -28,9 +28,9 @@ jobs:
       - name: Install
         if: steps.version.outputs.changed == 'true'
         run: npm ci
-      - name: Compile
+      - name: Build
         if: steps.version.outputs.changed == 'true'
-        run: npm run compile
+        run: npm run build
       - name: NPM Publish
         if: steps.version.outputs.changed == 'true'
         uses: JS-DevTools/npm-publish@v1

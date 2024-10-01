@@ -27,7 +27,7 @@ jobs:
           node-version: ${{ matrix.node-version }}
       - run: npm ci
       - run: npm install bullmq@${{ matrix.bullmq-version }}
-      - run: npm run compile
+      - run: npm run build
       - run: npm test
   lint:
     runs-on: ubuntu-latest

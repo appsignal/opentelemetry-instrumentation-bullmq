@@ -1,0 +1,4 @@
+---
+language: nodejs
+repo: "https://github.com/appsignal/appsignal-instrumentation-bullmq"
+npm_client: "npm"

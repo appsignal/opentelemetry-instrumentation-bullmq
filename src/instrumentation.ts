@@ -52,8 +52,7 @@ export interface BullMQInstrumentationConfig extends InstrumentationConfig {
   requireParentSpanForPublish?: boolean;
 
   /** Whether to use the producer context as the parent for the consumer span.
-   * Consumer and Producer will share the same TraceId in this case. Must not be
-   * used for batch message processing. Defaults to `false` */
+   * Consumer and Producer will share the same TraceId in this case. Defaults to `false` */
   useProducerContextAsConsumerParent?: boolean;
 }
 

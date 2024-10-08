@@ -70,6 +70,7 @@ function getWait(): [Promise<any>, Function, Function] {
 
 function assertSpanParent(span: ReadableSpan, parent: ReadableSpan) {
   assert.strictEqual(span.parentSpanId, parent.spanContext().spanId);
+  assert.strictEqual(span.spanContext().traceId, parent.spanContext().traceId);
 }
 
 function assertDifferentTrace(span: ReadableSpan, parent: ReadableSpan) {
@@ -870,8 +871,8 @@ describe("bullmq", () => {
       assertSpanParent(insideJobSpan!, workerJobSpan!);
     });
 
-    it("should set the producer context as active when useProducerContextAsConsumerParent true", async () => {
-      instrumentation.setConfig({ useProducerContextAsConsumerParent: true });
+    it("should use the producer span as parent when useProducerSpanAsConsumerParent is true", async () => {
+      instrumentation.setConfig({ useProducerSpanAsConsumerParent: true });
 
       const [processor, processorDone] = getWait();
 

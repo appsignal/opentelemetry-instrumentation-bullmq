@@ -50,12 +50,17 @@ export interface BullMQInstrumentationConfig extends InstrumentationConfig {
   /** Require a parent span in order to create a producer span
    * (a span for the enqueueing of one or more jobs) -- defaults to `false` */
   requireParentSpanForPublish?: boolean;
+
+  /** Whether to use the producer context as the parent for the consumer span.
+   * Consumer and Producer will share the same TraceId in this case. Defaults to `false` */
+  useProducerContextAsConsumerParent?: boolean;
 }
 
 export const defaultConfig: Required<BullMQInstrumentationConfig> = {
   emitCreateSpansForBulk: true,
   emitCreateSpansForFlow: true,
   requireParentSpanForPublish: false,
+  useProducerContextAsConsumerParent: false,
   // unused by `configFor` but required for the type
   enabled: true,
 };
@@ -446,42 +451,52 @@ export class BullMQInstrumentation extends InstrumentationBase {
         const producerContext = propagation.extract(currentContext, job.opts);
 
         const spanName = `${job.queueName} ${operationType}`;
-        const span = tracer.startSpan(spanName, {
-          attributes: BullMQInstrumentation.dropInvalidAttributes({
-            [SemanticAttributes.MESSAGING_SYSTEM]:
-              BullMQAttributes.MESSAGING_SYSTEM,
-            [SemanticAttributes.MESSAGING_CONSUMER_ID]: workerName,
-            [SemanticAttributes.MESSAGING_MESSAGE_ID]: job.id,
-            [SemanticAttributes.MESSAGING_OPERATION]: operationType,
-            [BullMQAttributes.MESSAGING_OPERATION_NAME]: operationName,
-            [BullMQAttributes.JOB_NAME]: job.name,
-            [BullMQAttributes.JOB_ATTEMPTS]: job.attemptsMade,
-            [BullMQAttributes.JOB_TIMESTAMP]: job.timestamp,
-            [BullMQAttributes.JOB_DELAY]: job.delay,
-            [BullMQAttributes.JOB_REPEAT_KEY]: job.repeatJobKey,
-            ...BullMQInstrumentation.attrMap(
-              BullMQAttributes.JOB_OPTS,
-              job.opts,
+        const span = tracer.startSpan(
+          spanName,
+          {
+            attributes: BullMQInstrumentation.dropInvalidAttributes({
+              [SemanticAttributes.MESSAGING_SYSTEM]:
+                BullMQAttributes.MESSAGING_SYSTEM,
+              [SemanticAttributes.MESSAGING_CONSUMER_ID]: workerName,
+              [SemanticAttributes.MESSAGING_MESSAGE_ID]: job.id,
+              [SemanticAttributes.MESSAGING_OPERATION]: operationType,
+              [BullMQAttributes.MESSAGING_OPERATION_NAME]: operationName,
+              [BullMQAttributes.JOB_NAME]: job.name,
+              [BullMQAttributes.JOB_ATTEMPTS]: job.attemptsMade,
+              [BullMQAttributes.JOB_TIMESTAMP]: job.timestamp,
+              [BullMQAttributes.JOB_DELAY]: job.delay,
+              [BullMQAttributes.JOB_REPEAT_KEY]: job.repeatJobKey,
+              ...BullMQInstrumentation.attrMap(
+                BullMQAttributes.JOB_OPTS,
+                job.opts,
+              ),
+              [SemanticAttributes.MESSAGING_DESTINATION]: job.queueName,
+              [BullMQAttributes.WORKER_CONCURRENCY]: this.opts?.concurrency,
+              [BullMQAttributes.WORKER_LOCK_DURATION]: this.opts?.lockDuration,
+              [BullMQAttributes.WORKER_LOCK_RENEW]: this.opts?.lockRenewTime,
+              [BullMQAttributes.WORKER_RATE_LIMIT_MAX]: this.opts?.limiter?.max,
+              [BullMQAttributes.WORKER_RATE_LIMIT_DURATION]:
+                this.opts?.limiter?.duration,
+              // Limit by group keys was removed in bullmq 3.x
+              [BullMQAttributes.WORKER_RATE_LIMIT_GROUP]: (
+                this.opts?.limiter as any
+              )?.groupKey,
+            }),
+            kind: SpanKind.CONSUMER,
+            links: BullMQInstrumentation.dropInvalidLinks(
+              instrumentation.configFor("useProducerContextAsConsumerParent")
+                ? []
+                : [
+                    {
+                      context: trace.getSpanContext(producerContext),
+                    },
+                  ],
             ),
-            [SemanticAttributes.MESSAGING_DESTINATION]: job.queueName,
-            [BullMQAttributes.WORKER_CONCURRENCY]: this.opts?.concurrency,
-            [BullMQAttributes.WORKER_LOCK_DURATION]: this.opts?.lockDuration,
-            [BullMQAttributes.WORKER_LOCK_RENEW]: this.opts?.lockRenewTime,
-            [BullMQAttributes.WORKER_RATE_LIMIT_MAX]: this.opts?.limiter?.max,
-            [BullMQAttributes.WORKER_RATE_LIMIT_DURATION]:
-              this.opts?.limiter?.duration,
-            // Limit by group keys was removed in bullmq 3.x
-            [BullMQAttributes.WORKER_RATE_LIMIT_GROUP]: (
-              this.opts?.limiter as any
-            )?.groupKey,
-          }),
-          kind: SpanKind.CONSUMER,
-          links: BullMQInstrumentation.dropInvalidLinks([
-            {
-              context: trace.getSpanContext(producerContext),
-            },
-          ]),
-        });
+          },
+          instrumentation.configFor("useProducerContextAsConsumerParent")
+            ? producerContext
+            : currentContext,
+        );
 
         const consumerContext = trace.setSpan(currentContext, span);
 

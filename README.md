@@ -46,11 +46,12 @@ registerInstrumentations({
 
 ## Configuration options
 
-| Name                          | Type      | Default&nbsp;value | Description                                                                                                                                                                                                  |
-| ----------------------------- | --------- | ------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `emitCreateSpansForBulk`      | `boolean` | `true`             | Whether to emit a create span for each individual job enqueued by `Queue.addBulk` or `FlowProducer.addBulk`. The span representing the overall bulk operation is emitted regardless.                         |
-| `emitCreateSpansForFlow`      | `boolean` | `true`             | Whether to emit a create span for each individual job enqueued by `FlowProducer.add` or `FlowProducer.addBulk`. The span representing the overall flow operation is emitted regardless.                      |
-| `requireParentSpanForPublish` | `boolean` | `false`            | Whether to omit emitting a publish span (and the create child spans for it, for bulk and flow operations) when there is no parent span, meaning that the span created would be the root span of a new trace. |
+| Name                                 | Type      | Default&nbsp;value | Description                                                                                                                                                                                                  |
+| ------------------------------------ | --------- | ------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `emitCreateSpansForBulk`             | `boolean` | `true`             | Whether to emit a create span for each individual job enqueued by `Queue.addBulk` or `FlowProducer.addBulk`. The span representing the overall bulk operation is emitted regardless.                         |
+| `emitCreateSpansForFlow`             | `boolean` | `true`             | Whether to emit a create span for each individual job enqueued by `FlowProducer.add` or `FlowProducer.addBulk`. The span representing the overall flow operation is emitted regardless.                      |
+| `requireParentSpanForPublish`        | `boolean` | `false`            | Whether to omit emitting a publish span (and the create child spans for it, for bulk and flow operations) when there is no parent span, meaning that the span created would be the root span of a new trace. |
+| `useProducerContextAsConsumerParent` | `boolean` | `false`            | Whether to use the producer context as the parent for the consumer span. Consumer and Producer will share the same TraceId in this case.                                                                     |
 
 ## Emitted spans
 

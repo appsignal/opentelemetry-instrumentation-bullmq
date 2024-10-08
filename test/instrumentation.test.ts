@@ -870,6 +870,42 @@ describe("bullmq", () => {
       assertSpanParent(insideJobSpan!, workerJobSpan!);
     });
 
+    it("should set the producer context as active when useProducerContextAsConsumerParent true", async () => {
+      instrumentation.setConfig({ useProducerContextAsConsumerParent: true });
+
+      const [processor, processorDone] = getWait();
+
+      const q = new Queue("queueName", { connection });
+      const w = new Worker(
+        "queueName",
+        async () => {
+          processorDone();
+          return { completed: new Date().toTimeString() };
+        },
+        { connection },
+      );
+      await w.waitUntilReady();
+
+      await q.add("testJob", { test: "yes" });
+
+      await processor;
+      await w.close();
+
+      const spans = memoryExporter.getFinishedSpans();
+      const producerJobSpan = spans.find((span) =>
+        span.name.includes("queueName publish"),
+      );
+      assert.notStrictEqual(producerJobSpan, undefined);
+      const workerJobSpan = spans.find((span) =>
+        span.name.includes("queueName process"),
+      );
+      assert.notStrictEqual(workerJobSpan, undefined);
+
+      assertSpanParent(workerJobSpan!, producerJobSpan!);
+
+      assert.ok(workerJobSpan!.links.length === 0);
+    });
+
     it("should capture events from the processor", async () => {
       const [processor, processorDone] = getWait();
 

@@ -35,32 +35,39 @@ const FLOW_CONTEXT = Symbol("BULLMQ_FLOW_CONTEXT");
 export interface BullMQInstrumentationConfig extends InstrumentationConfig {
   /**
    * Emit spans for each individual job enqueueing in calls to `Queue.addBulk`
-   * or `FlowProducer.addBulk`. Defaults to true. Setting it to false disables
+   * or `FlowProducer.addBulk`. Defaults to `true`. Setting it to `false` disables
    * individual job spans for bulk operations.
    */
   emitCreateSpansForBulk?: boolean;
 
   /**
    * Emit spans for each individual job enqueueing in calls to `FlowProducer.add`
-   * or `FlowProducer.addBulk`. Defaults to true. Setting it to false disables
+   * or `FlowProducer.addBulk`. Defaults to `true`. Setting it to `false` disables
    * individual job spans for bulk operations.
    */
   emitCreateSpansForFlow?: boolean;
 
-  /** Require a parent span in order to create a producer span
-   * (a span for the enqueueing of one or more jobs) -- defaults to `false` */
+  /**
+   * Require a parent span in order to create a producer span, that is, a span
+   * for the enqueueing of one or more jobs. Defaults to `false`.
+   */
   requireParentSpanForPublish?: boolean;
 
-  /** Whether to use the producer context as the parent for the consumer span.
-   * Consumer and Producer will share the same TraceId in this case. Defaults to `false` */
-  useProducerContextAsConsumerParent?: boolean;
+  /**
+   * Whether to use the producer kind (create or publish) span as the parent
+   * for the consumer kind (process) span. When set to `true`, the consumer and
+   * producer spans will be part of the same trace. When set to `false`, the
+   * consumer span will be in a separate trace from the producer span, and it
+   * will contain a link to the producer span. Defaults to `true`.
+   */
+  useProducerSpanAsConsumerParent?: boolean;
 }
 
 export const defaultConfig: Required<BullMQInstrumentationConfig> = {
   emitCreateSpansForBulk: true,
   emitCreateSpansForFlow: true,
   requireParentSpanForPublish: false,
-  useProducerContextAsConsumerParent: false,
+  useProducerSpanAsConsumerParent: false,
   // unused by `configFor` but required for the type
   enabled: true,
 };
@@ -446,9 +453,22 @@ export class BullMQInstrumentation extends InstrumentationBase {
         job: any,
         ...rest: any[]
       ) {
+        const producerParent = instrumentation.configFor(
+          "useProducerSpanAsConsumerParent",
+        );
+
         const workerName = this.name ?? "anonymous";
         const currentContext = context.active();
         const producerContext = propagation.extract(currentContext, job.opts);
+
+        const parentContext = producerParent ? producerContext : currentContext;
+        const links = BullMQInstrumentation.dropInvalidLinks([
+          {
+            context: producerParent
+              ? undefined
+              : trace.getSpanContext(producerContext),
+          },
+        ]);
 
         const spanName = `${job.queueName} ${operationType}`;
         const span = tracer.startSpan(
@@ -483,19 +503,9 @@ export class BullMQInstrumentation extends InstrumentationBase {
               )?.groupKey,
             }),
             kind: SpanKind.CONSUMER,
-            links: BullMQInstrumentation.dropInvalidLinks(
-              instrumentation.configFor("useProducerContextAsConsumerParent")
-                ? []
-                : [
-                    {
-                      context: trace.getSpanContext(producerContext),
-                    },
-                  ],
-            ),
+            links,
           },
-          instrumentation.configFor("useProducerContextAsConsumerParent")
-            ? producerContext
-            : currentContext,
+          parentContext,
         );
 
         const consumerContext = trace.setSpan(currentContext, span);

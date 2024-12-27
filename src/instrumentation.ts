@@ -508,7 +508,7 @@ export class BullMQInstrumentation extends InstrumentationBase {
           parentContext,
         );
 
-        const consumerContext = trace.setSpan(currentContext, span);
+        const consumerContext = trace.setSpan(parentContext, span);
 
         return await context.with(consumerContext, async () => {
           try {

@@ -55,7 +55,7 @@ function getWait(): [Promise<any>, Function, Function] {
 //     util.inspect(
 //       spans.map((span) => ({
 //         name: span.name,
-//         parent: spans.find((s) => s.spanContext().spanId === span.parentSpanId)
+//         parent: spans.find((s) => s.spanContext().spanId === span.parentSpanContext?.spanId)
 //           ?.name,
 //         trace: span.spanContext().traceId,
 //         kind: SpanKind[span.kind],
@@ -69,12 +69,18 @@ function getWait(): [Promise<any>, Function, Function] {
 // }
 
 function assertSpanParent(span: ReadableSpan, parent: ReadableSpan) {
-  assert.strictEqual(span.parentSpanId, parent.spanContext().spanId);
+  assert.strictEqual(
+    span.parentSpanContext?.spanId,
+    parent.spanContext().spanId,
+  );
   assert.strictEqual(span.spanContext().traceId, parent.spanContext().traceId);
 }
 
 function assertDifferentTrace(span: ReadableSpan, parent: ReadableSpan) {
-  assert.notStrictEqual(span.parentSpanId, parent.spanContext().spanId);
+  assert.notStrictEqual(
+    span.parentSpanContext?.spanId,
+    parent.spanContext().spanId,
+  );
   assert.notStrictEqual(
     span.spanContext().traceId,
     parent.spanContext().traceId,
@@ -92,7 +98,7 @@ function assertSpanLink(span: ReadableSpan, linked: ReadableSpan) {
 }
 
 function assertRootSpan(span: ReadableSpan) {
-  assert.strictEqual(span.parentSpanId, undefined);
+  assert.strictEqual(span.parentSpanContext, undefined);
 }
 
 function assertMessagingSystem(span: ReadableSpan) {
@@ -157,10 +163,10 @@ function contextualizeError(fn: () => void, context: Record<string, any>) {
 describe("bullmq", () => {
   const instrumentation = new BullMQInstrumentation();
   const connection = { host: "localhost" };
-  const provider = new NodeTracerProvider();
   const memoryExporter = new InMemorySpanExporter();
-  const spanProcessor = new SimpleSpanProcessor(memoryExporter);
-  provider.addSpanProcessor(spanProcessor);
+  const provider = new NodeTracerProvider({
+    spanProcessors: [new SimpleSpanProcessor(memoryExporter)],
+  });
   const contextManager = new AsyncHooksContextManager();
 
   beforeEach(() => {

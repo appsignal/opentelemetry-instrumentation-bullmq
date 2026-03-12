@@ -37,7 +37,11 @@ type ParentOpts = Parameters<Job["addJob"]>[1] & {
 import { flatten } from "flat";
 
 import { VERSION } from "./version";
-import { SemanticAttributes, BullMQAttributes } from "./attributes";
+import {
+  SemanticAttributes,
+  BullMQAttributes,
+  MessagingOperationTypeValues,
+} from "./attributes";
 
 declare type Fn = (...args: any[]) => any;
 const BULK_CONTEXT = Symbol("BULLMQ_BULK_CONTEXT");
@@ -174,7 +178,6 @@ export class BullMQInstrumentation extends InstrumentationBase {
     const instrumentation = this;
     const tracer = instrumentation.tracer;
     const operationName = "Job.addJob";
-    const operationType = "create";
 
     return function addJob(original) {
       return async function patch(
@@ -212,12 +215,13 @@ export class BullMQInstrumentation extends InstrumentationBase {
         let childSpan: Span | undefined;
 
         if (shouldCreateSpan) {
-          const spanName = `${this.queueName} ${operationType}`;
+          const spanName = `${operationName} ${this.queueName}`;
           childSpan = tracer.startSpan(spanName, {
             kind: SpanKind.PRODUCER,
             attributes: {
-              [SemanticAttributes.MESSAGING_OPERATION]: operationType,
-              [BullMQAttributes.MESSAGING_OPERATION_NAME]: operationName,
+              [SemanticAttributes.MESSAGING_OPERATION_NAME]: operationName,
+              [SemanticAttributes.MESSAGING_OPERATION_TYPE]:
+                MessagingOperationTypeValues.CREATE,
             },
           });
         }
@@ -229,7 +233,7 @@ export class BullMQInstrumentation extends InstrumentationBase {
             BullMQInstrumentation.dropInvalidAttributes({
               [SemanticAttributes.MESSAGING_SYSTEM]:
                 BullMQAttributes.MESSAGING_SYSTEM,
-              [SemanticAttributes.MESSAGING_DESTINATION]: this.queueName,
+              [SemanticAttributes.MESSAGING_DESTINATION_NAME]: this.queueName,
               [BullMQAttributes.JOB_NAME]: this.name,
               [BullMQAttributes.JOB_PARENT_KEY]: parentOpts?.parentKey,
               // Normalised across bullmq versions: `waitChildrenKey` (a Redis
@@ -277,7 +281,6 @@ export class BullMQInstrumentation extends InstrumentationBase {
     const instrumentation = this;
     const tracer = instrumentation.tracer;
     const operationName = "Queue.add";
-    const operationType = "publish";
 
     return function add(original) {
       return async function patch(this: Queue, ...args: any): Promise<Job> {
@@ -290,12 +293,13 @@ export class BullMQInstrumentation extends InstrumentationBase {
 
         const [name] = [...args];
 
-        const spanName = `${this.name} ${operationType}`;
+        const spanName = `${operationName} ${this.name}`;
         const span = tracer.startSpan(spanName, {
           kind: SpanKind.PRODUCER,
           attributes: {
-            [SemanticAttributes.MESSAGING_OPERATION]: operationType,
-            [BullMQAttributes.MESSAGING_OPERATION_NAME]: operationName,
+            [SemanticAttributes.MESSAGING_OPERATION_NAME]: operationName,
+            [SemanticAttributes.MESSAGING_OPERATION_TYPE]:
+              MessagingOperationTypeValues.SEND,
           },
         });
 
@@ -308,7 +312,6 @@ export class BullMQInstrumentation extends InstrumentationBase {
     const instrumentation = this;
     const tracer = instrumentation.tracer;
     const operationName = "Queue.addBulk";
-    const operationType = "publish";
 
     return function addBulk(original) {
       return async function patch(
@@ -324,7 +327,7 @@ export class BullMQInstrumentation extends InstrumentationBase {
 
         const names = args[0].map((job) => job.name);
 
-        const spanName = `${this.name} ${operationType}`;
+        const spanName = `${operationName} ${this.name}`;
         const spanKind = instrumentation.shouldCreateSpan({
           isBulk: true,
           isFlow: false,
@@ -336,11 +339,12 @@ export class BullMQInstrumentation extends InstrumentationBase {
           attributes: {
             [SemanticAttributes.MESSAGING_SYSTEM]:
               BullMQAttributes.MESSAGING_SYSTEM,
-            [SemanticAttributes.MESSAGING_DESTINATION]: this.name,
-            [SemanticAttributes.MESSAGING_OPERATION]: operationType,
-            [BullMQAttributes.MESSAGING_OPERATION_NAME]: operationName,
+            [SemanticAttributes.MESSAGING_DESTINATION_NAME]: this.name,
+            [SemanticAttributes.MESSAGING_OPERATION_NAME]: operationName,
+            [SemanticAttributes.MESSAGING_OPERATION_TYPE]:
+              MessagingOperationTypeValues.SEND,
             [BullMQAttributes.JOB_BULK_NAMES]: names,
-            [BullMQAttributes.JOB_BULK_COUNT]: names.length,
+            [SemanticAttributes.MESSAGING_BATCH_MESSAGE_COUNT]: names.length,
           },
           kind: spanKind,
         });
@@ -358,7 +362,6 @@ export class BullMQInstrumentation extends InstrumentationBase {
     const instrumentation = this;
     const tracer = instrumentation.tracer;
     const operationName = "FlowProducer.add";
-    const operationType = "publish";
 
     return function add(original) {
       return async function patch(
@@ -373,7 +376,7 @@ export class BullMQInstrumentation extends InstrumentationBase {
           return await original.apply(this, [flow, opts]);
         }
 
-        const spanName = `${flow.queueName} ${operationType}`;
+        const spanName = `${operationName} ${flow.queueName}`;
         const spanKind = instrumentation.shouldCreateSpan({
           isBulk: false,
           isFlow: true,
@@ -385,9 +388,10 @@ export class BullMQInstrumentation extends InstrumentationBase {
           attributes: {
             [SemanticAttributes.MESSAGING_SYSTEM]:
               BullMQAttributes.MESSAGING_SYSTEM,
-            [SemanticAttributes.MESSAGING_DESTINATION]: flow.queueName,
-            [SemanticAttributes.MESSAGING_OPERATION]: operationType,
-            [BullMQAttributes.MESSAGING_OPERATION_NAME]: operationName,
+            [SemanticAttributes.MESSAGING_DESTINATION_NAME]: flow.queueName,
+            [SemanticAttributes.MESSAGING_OPERATION_NAME]: operationName,
+            [SemanticAttributes.MESSAGING_OPERATION_TYPE]:
+              MessagingOperationTypeValues.SEND,
             [BullMQAttributes.JOB_NAME]: flow.name,
           },
           kind: spanKind,
@@ -412,7 +416,6 @@ export class BullMQInstrumentation extends InstrumentationBase {
     const instrumentation = this;
     const tracer = instrumentation.tracer;
     const operationName = "FlowProducer.addBulk";
-    const operationType = "publish";
 
     return function addBulk(original) {
       return async function patch(
@@ -426,7 +429,7 @@ export class BullMQInstrumentation extends InstrumentationBase {
           return await original.apply(this, args);
         }
 
-        const spanName = `(bulk) ${operationType}`;
+        const spanName = `${operationName} (bulk)`;
         const spanKind = instrumentation.shouldCreateSpan({
           isBulk: true,
           isFlow: true,
@@ -439,10 +442,11 @@ export class BullMQInstrumentation extends InstrumentationBase {
           attributes: {
             [SemanticAttributes.MESSAGING_SYSTEM]:
               BullMQAttributes.MESSAGING_SYSTEM,
-            [SemanticAttributes.MESSAGING_OPERATION]: operationType,
-            [BullMQAttributes.MESSAGING_OPERATION_NAME]: operationName,
+            [SemanticAttributes.MESSAGING_OPERATION_NAME]: operationName,
+            [SemanticAttributes.MESSAGING_OPERATION_TYPE]:
+              MessagingOperationTypeValues.SEND,
             [BullMQAttributes.JOB_BULK_NAMES]: names,
-            [BullMQAttributes.JOB_BULK_COUNT]: names.length,
+            [SemanticAttributes.MESSAGING_BATCH_MESSAGE_COUNT]: names.length,
           },
           kind: spanKind,
         });
@@ -460,7 +464,6 @@ export class BullMQInstrumentation extends InstrumentationBase {
   ) => (...args: any) => any {
     const instrumentation = this;
     const tracer = instrumentation.tracer;
-    const operationType = "process";
     const operationName = "Worker.run";
 
     return function patch(original) {
@@ -486,17 +489,18 @@ export class BullMQInstrumentation extends InstrumentationBase {
           },
         ]);
 
-        const spanName = `${job.queueName} ${operationType}`;
+        const spanName = `${operationName} ${job.queueName}`;
         const span = tracer.startSpan(
           spanName,
           {
             attributes: BullMQInstrumentation.dropInvalidAttributes({
               [SemanticAttributes.MESSAGING_SYSTEM]:
                 BullMQAttributes.MESSAGING_SYSTEM,
-              [SemanticAttributes.MESSAGING_CONSUMER_ID]: workerName,
+              [SemanticAttributes.MESSAGING_CLIENT_ID]: workerName,
               [SemanticAttributes.MESSAGING_MESSAGE_ID]: job.id,
-              [SemanticAttributes.MESSAGING_OPERATION]: operationType,
-              [BullMQAttributes.MESSAGING_OPERATION_NAME]: operationName,
+              [SemanticAttributes.MESSAGING_OPERATION_NAME]: operationName,
+              [SemanticAttributes.MESSAGING_OPERATION_TYPE]:
+                MessagingOperationTypeValues.PROCESS,
               [BullMQAttributes.JOB_NAME]: job.name,
               [BullMQAttributes.JOB_ATTEMPTS]: job.attemptsMade,
               [BullMQAttributes.JOB_TIMESTAMP]: job.timestamp,
@@ -506,7 +510,7 @@ export class BullMQInstrumentation extends InstrumentationBase {
                 BullMQAttributes.JOB_OPTS,
                 job.opts,
               ),
-              [SemanticAttributes.MESSAGING_DESTINATION]: job.queueName,
+              [SemanticAttributes.MESSAGING_DESTINATION_NAME]: job.queueName,
               [BullMQAttributes.WORKER_CONCURRENCY]: this.opts?.concurrency,
               [BullMQAttributes.WORKER_LOCK_DURATION]: this.opts?.lockDuration,
               [BullMQAttributes.WORKER_LOCK_RENEW]: this.opts?.lockRenewTime,

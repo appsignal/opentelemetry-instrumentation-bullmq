@@ -14,7 +14,7 @@
     "lint:fix": "eslint src/ test/ --ext .ts --fix; prettier -w .",
     "prepare": "npm run build",
     "test": "mocha --require ts-node/register --exit --timeout 10000 test/**/*.test.ts",
-    "test:all": "for v in 2 3 4 latest; do npm i bullmq@$v; npm list bullmq; npm run test; done;"
+    "test:all": "for v in 2 3 4 5.52.2 5.52.3 5.61.2 5.62.0 latest; do npm i bullmq@$v; npm list bullmq; npm run test; done;"
   },
   "keywords": [
     "bullmq",
@@ -60,7 +60,7 @@
     "@types/sinon": "^10.0.13",
     "@typescript-eslint/eslint-plugin": "^5.35.1",
     "@typescript-eslint/parser": "^5.35.1",
-    "bullmq": "^5.7.11",
+    "bullmq": "^5.70.4",
     "eslint": "^8.23.0",
     "eslint-config-prettier": "^9.1.0",
     "ioredis-mock": "^8.2.2",

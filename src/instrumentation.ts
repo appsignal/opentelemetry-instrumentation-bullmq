@@ -19,10 +19,21 @@ import type {
   Job,
   JobNode,
   JobsOptions,
-  ParentOpts,
   Queue,
   Worker,
 } from "bullmq";
+
+// Derive the parent opts type from addJob's signature so it stays in sync
+// across bullmq versions: the type was called `ParentOpts` up to 5.52.2 and
+// was renamed to `ParentKeyOpts` in 5.52.3. Additionally, `waitChildrenKey`
+// (a Redis key string) was replaced by `addToWaitingChildren` (a boolean)
+// in 5.62.0. We augment the derived type so that both fields are accessible
+// across all versions without a cast: `waitChildrenKey` for older versions,
+// `addToWaitingChildren` for newer ones.
+type ParentOpts = Parameters<Job["addJob"]>[1] & {
+  waitChildrenKey?: string;
+  addToWaitingChildren?: boolean;
+};
 import { flatten } from "flat";
 
 import { VERSION } from "./version";
@@ -221,8 +232,13 @@ export class BullMQInstrumentation extends InstrumentationBase {
               [SemanticAttributes.MESSAGING_DESTINATION]: this.queueName,
               [BullMQAttributes.JOB_NAME]: this.name,
               [BullMQAttributes.JOB_PARENT_KEY]: parentOpts?.parentKey,
-              [BullMQAttributes.JOB_WAIT_CHILDREN_KEY]:
-                parentOpts?.waitChildrenKey,
+              // Normalised across bullmq versions: `waitChildrenKey` (a Redis
+              // key string, ≤ 5.61.2) and `addToWaitingChildren` (a boolean,
+              // ≥ 5.62.0) both mean "this job is a flow parent waiting for
+              // its children to complete."
+              [BullMQAttributes.JOB_ADD_TO_WAITING_CHILDREN]:
+                parentOpts?.addToWaitingChildren ??
+                (parentOpts?.waitChildrenKey != null ? true : undefined),
               ...BullMQInstrumentation.attrMap(
                 BullMQAttributes.JOB_OPTS,
                 this.opts,

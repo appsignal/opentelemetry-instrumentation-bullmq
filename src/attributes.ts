@@ -24,7 +24,7 @@ export const BullMQAttributes = {
   JOB_REPEAT_KEY: `${job}.repeatJobKey`,
   JOB_TIMESTAMP: `${job}.timestamp`,
   JOB_PARENT_KEY: `${job}.parentOpts.parentKey`,
-  JOB_WAIT_CHILDREN_KEY: `${job}.parentOpts.waitChildrenKey`,
+  JOB_ADD_TO_WAITING_CHILDREN: `${job}.parentOpts.addToWaitingChildren`,
   JOB_BULK_NAMES: `${job}.bulk.names`,
   JOB_BULK_COUNT: `${job}.bulk.count`,
   WORKER_CONCURRENCY: `${worker}.concurrency`,

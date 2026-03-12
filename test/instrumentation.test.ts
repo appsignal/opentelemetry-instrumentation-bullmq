@@ -575,8 +575,7 @@ describe("bullmq", () => {
         "messaging.bullmq.operation.name": "Job.addJob",
         "messaging.operation": "create",
         "messaging.bullmq.job.name": "jobName",
-        "messaging.bullmq.job.parentOpts.waitChildrenKey":
-          "bull:queueName:waiting-children",
+        "messaging.bullmq.job.parentOpts.addToWaitingChildren": true,
       });
       assert.strictEqual(
         typeof jobAddSpan?.attributes!["messaging.message_id"],
@@ -617,7 +616,7 @@ describe("bullmq", () => {
         jobId,
       );
       assertDoesNotContain(childJobAddSpan?.attributes!, [
-        "messaging.bullmq.job.parentOpts.waitChildrenKey",
+        "messaging.bullmq.job.parentOpts.addToWaitingChildren",
       ]);
 
       assertSpanParent(jobAddSpan!, flowProducerAddSpan!);

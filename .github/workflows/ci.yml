@@ -11,9 +11,12 @@ jobs:
   build:
     runs-on: ubuntu-latest
     strategy:
+      # Without this, the first leg to fail cancels the rest, which hides
+      # whether the others passed.
+      fail-fast: false
       matrix:
         node-version: [18.x, 20.x, 21.x, 22.x]
-        bullmq-version: [2.x, 3.x, 4.x, latest]
+        bullmq-version: [2.0.0, 2.x, 3.x, 4.x, 5.x]
     services:
       redis:
         image: redis:alpine

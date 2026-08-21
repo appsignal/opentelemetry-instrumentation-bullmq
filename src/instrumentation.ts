@@ -108,7 +108,7 @@ export class BullMQInstrumentation extends InstrumentationBase {
   protected init() {
     return new InstrumentationNodeModuleDefinition(
       "bullmq",
-      ["1.*", "2.*", "3.*", "4.*", "5.*"],
+      ["2.*", "3.*", "4.*", "5.*"],
       this._onPatchMain(),
       this._onUnPatchMain(),
     );

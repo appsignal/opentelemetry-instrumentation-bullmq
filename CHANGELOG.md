@@ -1,5 +1,32 @@
 # OpenTelemetry instrumentation for BullMQ
 
+## 0.9.0
+
+_Published on 2026-08-24._
+
+### Changed
+
+- Declare `@opentelemetry/api` as a peer dependency instead of a regular
+  dependency, so that npm installs one copy of it, shared with your application.
+
+  Two copies of `@opentelemetry/api` in the same project can silently stop this
+  instrumentation from reporting anything. The OpenTelemetry API keeps its global
+  tracer provider on a global object, and a copy of the API only reads that global
+  when its version is compatible with the version that wrote it. When the copies
+  do not match, this instrumentation receives a tracer that does nothing, and no
+  error is reported.
+
+  If your project pins `@opentelemetry/api` to a version outside the range this
+  package supports, npm will now warn you about it at install time rather than
+  installing a second copy.
+
+  (minor [ef2b86e](https://github.com/appsignal/appsignal-instrumentation-bullmq/commit/ef2b86ec7afd4a84bced284d6acc0fb44233e4df))
+- Update the bundled `@opentelemetry/instrumentation` and
+  `@opentelemetry/semantic-conventions` packages to their current versions. The
+  span attributes this instrumentation emits are unchanged.
+
+  (minor [d0e4815](https://github.com/appsignal/appsignal-instrumentation-bullmq/commit/d0e48159a088024b0043cd83c3c28dc7030bcfb8))
+
 ## 0.8.0
 
 _Published on 2026-03-12._
